@@ -315,7 +315,7 @@ Instructions:
 
     // ==========================================
     // UNIFIED CHAT DISPATCHER (CASCADE ROUTER)
-    // Order: Tier 1: OpenRouter Free -> Tier 2: Grok/Groq -> Tier 3: Zero-API Free -> Tier 4: Gemini -> Tier 5: Local
+    // 1. Groq LPUs (Ultra-Fast: ~300ms) -> 2. OpenRouter Fast Free -> 3. Zero-API -> 4. Gemini -> 5. Local
     // ==========================================
     async chat(userPrompt, allAssets = [], nodes = [], devices = []) {
         const relevantAssets = this.findRelevantAssets(userPrompt, allAssets);
@@ -328,29 +328,29 @@ Instructions:
 
         const systemPrompt = this.getSystemPrompt(context);
 
-        // 1. TIER 1: OpenRouter (All Free Models)
+        // 1. TIER 1: Groq Ultra-Fast LPU Engine (~300ms response)
         try {
-            const res = await this.callOpenRouter(systemPrompt, userPrompt);
+            const res = await this.callGroq(systemPrompt, userPrompt);
             res.tier = 'Tier 1';
             this.conversationHistory.push({ role: 'user', content: userPrompt });
             this.conversationHistory.push({ role: 'assistant', content: res.reply });
             return res;
         } catch (err1) {
-            console.warn('[Tier 1 OpenRouter Failed]:', err1.message);
+            console.warn('[Tier 1 Groq Failed]:', err1.message);
         }
 
-        // 2. TIER 2: Grok / Groq AI
+        // 2. TIER 2: OpenRouter Free Models
         try {
-            const res = await this.callGroq(systemPrompt, userPrompt);
+            const res = await this.callOpenRouter(systemPrompt, userPrompt);
             res.tier = 'Tier 2';
             this.conversationHistory.push({ role: 'user', content: userPrompt });
             this.conversationHistory.push({ role: 'assistant', content: res.reply });
             return res;
         } catch (err2) {
-            console.warn('[Tier 2 Grok/Groq Failed]:', err2.message);
+            console.warn('[Tier 2 OpenRouter Failed]:', err2.message);
         }
 
-        // 3. TIER 3: Zero-API Free Endpoint
+        // 3. TIER 3: Zero-API Fast Web Endpoint
         try {
             const res = await this.callZeroApi(systemPrompt, userPrompt);
             res.tier = 'Tier 3';

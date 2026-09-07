@@ -13,10 +13,7 @@ echo.
 
 set "REPO_URL=https://github.com/sammysam254/omninode-ai.git"
 
-:: 2. Safely free port 5173 if occupied by previous session
-powershell -NoProfile -Command "try { Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } } catch {}" >nul 2>&1
-
-:: 3. Check Git and update repository
+:: 2. Check Git and update repository
 where git >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     if not exist "web" (
@@ -37,7 +34,7 @@ if %ERRORLEVEL% EQU 0 (
     echo [!] Git not in PATH. Proceeding with local files.
 )
 
-:: 4. Check Node.js
+:: 3. Check Node.js
 where node >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo [!] Node.js not found on this system.
@@ -56,7 +53,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo [OK] Node.js detected:
 node --version
 
-:: 5. Install Dependencies if needed
+:: 4. Install Dependencies if needed
 if not exist "agent\node_modules" (
     echo [*] Installing Agent dependencies...
     pushd agent
@@ -71,7 +68,7 @@ if not exist "web\node_modules" (
     popd
 )
 
-:: 6. Ensure Environment Files with Supabase Keys
+:: 5. Ensure Environment Files with Supabase Keys
 if not exist "agent\.env" (
     if exist ".env" (
         copy .env agent\.env >nul
@@ -94,7 +91,7 @@ if not exist "web\.env" (
     )
 )
 
-:: 7. Check ADB
+:: 6. Check ADB
 where adb >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [OK] Android Debug Bridge ADB detected.
@@ -109,11 +106,11 @@ echo   [2/2] Starting Universal PC and Android ADB Sync Agent...
 echo =====================================================================
 echo.
 
-:: Launch Web Server in background window (uses cmd /k so it stays open)
+:: Launch Web Server in background window
 start "OmniNode_Web_Server" cmd /k "cd /d ""%~dp0web"" && npm run dev"
 
-:: Open Browser after 3 seconds
-timeout /t 3 /nobreak >nul
+:: Open Browser using ping delay (reliable across all Windows versions)
+ping 127.0.0.1 -n 3 >nul
 start http://localhost:5173
 
 :: Enter agent directory and run agent with restart guard
