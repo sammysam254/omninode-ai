@@ -19,7 +19,11 @@ class SupabaseService {
     init() {
         try {
             this.client = createClient(this.url, this.key, {
-                auth: { persistSession: false },
+                auth: { 
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: true
+                },
                 realtime: { params: { eventsPerSecond: 20 } }
             });
             this.isConfigured = true;

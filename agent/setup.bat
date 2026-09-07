@@ -68,7 +68,7 @@ where adb >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [OK] Android Debug Bridge ADB detected.
 ) else (
-    echo [!] ADB not found in system PATH.
+    echo [!] Using bundled ADB in agent/bin.
 )
 
 echo.
@@ -78,8 +78,12 @@ echo   Press Ctrl+C at any time to stop.
 echo =====================================================================
 echo.
 
+:run_agent_loop
 node agent.js
-
 echo.
-echo [!] OmniNode Agent stopped.
+echo [!] OmniNode Agent process ended.
+echo =====================================================================
+echo Press any key to restart the OmniNode Agent, or close this window.
+echo =====================================================================
 pause
+goto run_agent_loop

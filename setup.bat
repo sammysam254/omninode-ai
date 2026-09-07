@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: Anchor to current directory
+:: 1. Anchor working directory to script location
 cd /d "%~dp0"
 
-title OmniNode AI - Universal Launcher and Installer
+title OmniNode AI - Universal Setup and Launcher
 
 echo =====================================================================
 echo          OmniNode AI - Universal All-in-One Setup and Launcher        
@@ -13,10 +13,10 @@ echo.
 
 set "REPO_URL=https://github.com/sammysam254/omninode-ai.git"
 
-:: 0. Free port 5173 if previously occupied
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5173" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
+:: 2. Safely free port 5173 if occupied by previous session
+powershell -NoProfile -Command "try { Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } } catch {}" >nul 2>&1
 
-:: 1. Check Git and Bootstrap Repository if needed
+:: 3. Check Git and update repository
 where git >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     if not exist "web" (
@@ -34,10 +34,10 @@ if %ERRORLEVEL% EQU 0 (
         echo [OK] Codebase is up to date.
     )
 ) else (
-    echo [!] Git not found in system PATH. Proceeding with local files.
+    echo [!] Git not in PATH. Proceeding with local files.
 )
 
-:: 2. Check Node.js
+:: 4. Check Node.js
 where node >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo [!] Node.js not found on this system.
@@ -46,6 +46,7 @@ if %ERRORLEVEL% NEQ 0 (
     if %ERRORLEVEL% NEQ 0 (
         echo [ERROR] Automated Node.js installation failed.
         echo Please download and install Node.js from https://nodejs.org
+        echo.
         pause
         exit /b 1
     )
@@ -55,26 +56,22 @@ if %ERRORLEVEL% NEQ 0 (
 echo [OK] Node.js detected:
 node --version
 
-:: 3. Setup Agent Dependencies
-echo.
-echo [*] Checking Agent dependencies...
+:: 5. Install Dependencies if needed
 if not exist "agent\node_modules" (
-    echo [*] Installing Agent dependencies in agent folder...
+    echo [*] Installing Agent dependencies...
     pushd agent
     call npm install --no-audit --no-fund
     popd
 )
 
-:: 4. Setup Web Dashboard Dependencies
-echo [*] Checking Web Dashboard dependencies...
 if not exist "web\node_modules" (
-    echo [*] Installing Web dependencies in web folder...
+    echo [*] Installing Web dependencies...
     pushd web
     call npm install --no-audit --no-fund
     popd
 )
 
-:: 5. Ensure Environment Configurations
+:: 6. Ensure Environment Files with Supabase Keys
 if not exist "agent\.env" (
     if exist ".env" (
         copy .env agent\.env >nul
@@ -97,13 +94,12 @@ if not exist "web\.env" (
     )
 )
 
-:: 6. Check Android Debug Bridge (ADB)
-echo.
+:: 7. Check ADB
 where adb >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [OK] Android Debug Bridge ADB detected.
 ) else (
-    echo [!] ADB not in system PATH.
+    echo [!] Using bundled ADB in agent/bin.
 )
 
 echo.
@@ -113,17 +109,23 @@ echo   [2/2] Starting Universal PC and Android ADB Sync Agent...
 echo =====================================================================
 echo.
 
-:: Launch Web Server in a separate background window
-start "OmniNode AI - Web Dashboard Server" cmd /c "cd /d ""%~dp0web"" && npm run dev"
+:: Launch Web Server in background window (uses cmd /k so it stays open)
+start "OmniNode_Web_Server" cmd /k "cd /d ""%~dp0web"" && npm run dev"
 
-:: Wait 3 seconds for web server to initialize then open default browser
+:: Open Browser after 3 seconds
 timeout /t 3 /nobreak >nul
 start http://localhost:5173
 
-:: Launch Agent in the main window
+:: Enter agent directory and run agent with restart guard
 cd /d "%~dp0agent"
-node agent.js
 
+:run_agent
+echo [*] Starting OmniNode Realtime Sync Agent...
+node agent.js
 echo.
-echo [!] OmniNode Agent stopped.
+echo [!] OmniNode Agent process ended.
+echo =====================================================================
+echo Press any key to restart the OmniNode Agent, or close this window.
+echo =====================================================================
 pause
+goto run_agent

@@ -8,7 +8,7 @@ let allAssets = [];
 let currentUser = null;
 
 // Chat Sessions State
-let chatSessions = JSON.parse(localStorage.getItem('omni_chat_sessions') || '[]');
+let chatSessions = [];
 let currentSessionId = null;
 
 // DOM Elements
@@ -64,6 +64,21 @@ const btnDownloadAgent = document.getElementById('btnDownloadAgent');
 const btnCloseDownloadModal = document.getElementById('btnCloseDownloadModal');
 const btnDownloadBatFile = document.getElementById('btnDownloadBatFile');
 
+// Button Loading Helper
+function setButtonLoading(btn, isLoading, loadingText = 'Loading...') {
+    if (!btn) return;
+    if (isLoading) {
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = `<span class="btn-spinner"></span> <span>${loadingText}</span>`;
+    } else {
+        btn.disabled = false;
+        if (btn.dataset.originalHtml) {
+            btn.innerHTML = btn.dataset.originalHtml;
+        }
+    }
+}
+
 // Load Background Data from Supabase
 async function loadBackgroundData() {
     try {
@@ -88,19 +103,45 @@ async function loadBackgroundData() {
     }
 }
 
-// User Authentication
+// User Authentication & Session Persistence
+function getSessionStorageKey() {
+    return currentUser ? `omni_chat_sessions_${currentUser.id}` : 'omni_chat_sessions_guest';
+}
+
+function loadChatSessionsForUser() {
+    const key = getSessionStorageKey();
+    chatSessions = JSON.parse(localStorage.getItem(key) || '[]');
+    if (chatSessions.length === 0) {
+        createNewChatSession(false);
+    } else {
+        loadChatSession(chatSessions[0].id);
+    }
+    renderChatHistorySidebar();
+}
+
 async function checkAuthSession() {
     if (supabaseService.client) {
         try {
+            // Listen for continuous auth state changes (remember logins)
+            supabaseService.client.auth.onAuthStateChange((event, session) => {
+                if (session?.user) {
+                    setLoggedInUser(session.user);
+                } else if (event === 'SIGNED_OUT') {
+                    setLoggedOutState();
+                }
+            });
+
             const { data } = await supabaseService.client.auth.getSession();
             if (data?.session?.user) {
                 setLoggedInUser(data.session.user);
                 return;
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn('Supabase auth session check:', e.message);
+        }
     }
 
-    // Default Guest state
+    // Check Guest State
     const localGuest = localStorage.getItem('omni_guest_user');
     if (localGuest) {
         setLoggedInUser(JSON.parse(localGuest));
@@ -120,6 +161,8 @@ function setLoggedInUser(user) {
 
     authLoggedOutView.style.display = 'none';
     authLoggedInView.style.display = 'block';
+
+    loadChatSessionsForUser();
 }
 
 function setLoggedOutState() {
@@ -131,18 +174,11 @@ function setLoggedOutState() {
 
     authLoggedOutView.style.display = 'block';
     authLoggedInView.style.display = 'none';
+
+    loadChatSessionsForUser();
 }
 
 // Chat Session Management
-function initChatSessions() {
-    if (chatSessions.length === 0) {
-        createNewChatSession(false);
-    } else {
-        loadChatSession(chatSessions[0].id);
-    }
-    renderChatHistorySidebar();
-}
-
 function createNewChatSession(shouldFocus = true) {
     const newSession = {
         id: 'session_' + Date.now(),
@@ -190,7 +226,8 @@ function deleteChatSession(sessionId, e) {
 }
 
 function saveChatSessions() {
-    localStorage.setItem('omni_chat_sessions', JSON.stringify(chatSessions));
+    const key = getSessionStorageKey();
+    localStorage.setItem(key, JSON.stringify(chatSessions));
 }
 
 function renderChatHistorySidebar() {
@@ -474,30 +511,44 @@ function setupEvents() {
         paneAuth.classList.remove('active');
     });
 
-    // Authentication Actions
+    // Authentication Actions with Supabase and loading animations
     btnSignUp.addEventListener('click', async () => {
         const email = authEmail.value.trim();
         const password = authPassword.value;
         authErrorMsg.textContent = '';
 
         if (!email || !password) {
-            authErrorMsg.textContent = 'Please enter email and password.';
+            authErrorMsg.textContent = 'Please enter both email and password.';
             return;
         }
 
-        if (supabaseService.client) {
-            const { data, error } = await supabaseService.client.auth.signUp({ email, password });
-            if (error) {
-                authErrorMsg.textContent = error.message;
+        setButtonLoading(btnSignUp, true, 'Creating Account...');
+
+        try {
+            if (supabaseService.client) {
+                const { data, error } = await supabaseService.client.auth.signUp({ email, password });
+                if (error) {
+                    authErrorMsg.textContent = error.message;
+                } else {
+                    if (data?.session?.user) {
+                        setLoggedInUser(data.session.user);
+                    } else if (data?.user) {
+                        setLoggedInUser(data.user);
+                    } else {
+                        setLoggedInUser({ email, id: 'user_' + Date.now() });
+                    }
+                    accountModal.classList.remove('open');
+                }
             } else {
-                setLoggedInUser(data.user || { email });
+                const guest = { email, id: 'user_' + Date.now() };
+                localStorage.setItem('omni_guest_user', JSON.stringify(guest));
+                setLoggedInUser(guest);
                 accountModal.classList.remove('open');
             }
-        } else {
-            const guest = { email, id: 'user_' + Date.now() };
-            localStorage.setItem('omni_guest_user', JSON.stringify(guest));
-            setLoggedInUser(guest);
-            accountModal.classList.remove('open');
+        } catch (err) {
+            authErrorMsg.textContent = err.message || 'Registration failed.';
+        } finally {
+            setButtonLoading(btnSignUp, false);
         }
     });
 
@@ -507,51 +558,71 @@ function setupEvents() {
         authErrorMsg.textContent = '';
 
         if (!email || !password) {
-            authErrorMsg.textContent = 'Please enter email and password.';
+            authErrorMsg.textContent = 'Please enter both email and password.';
             return;
         }
 
-        if (supabaseService.client) {
-            const { data, error } = await supabaseService.client.auth.signInWithPassword({ email, password });
-            if (error) {
-                authErrorMsg.textContent = error.message;
+        setButtonLoading(btnSignIn, true, 'Signing In...');
+
+        try {
+            if (supabaseService.client) {
+                const { data, error } = await supabaseService.client.auth.signInWithPassword({ email, password });
+                if (error) {
+                    authErrorMsg.textContent = error.message;
+                } else {
+                    setLoggedInUser(data.user);
+                    accountModal.classList.remove('open');
+                }
             } else {
-                setLoggedInUser(data.user);
+                const guest = { email, id: 'user_' + Date.now() };
+                localStorage.setItem('omni_guest_user', JSON.stringify(guest));
+                setLoggedInUser(guest);
                 accountModal.classList.remove('open');
             }
-        } else {
-            const guest = { email, id: 'user_' + Date.now() };
-            localStorage.setItem('omni_guest_user', JSON.stringify(guest));
-            setLoggedInUser(guest);
-            accountModal.classList.remove('open');
+        } catch (err) {
+            authErrorMsg.textContent = err.message || 'Login failed.';
+        } finally {
+            setButtonLoading(btnSignIn, false);
         }
     });
 
     btnSignOut.addEventListener('click', async () => {
-        if (supabaseService.client) {
-            await supabaseService.client.auth.signOut();
+        setButtonLoading(btnSignOut, true, 'Signing Out...');
+        try {
+            if (supabaseService.client) {
+                await supabaseService.client.auth.signOut();
+            }
+            localStorage.removeItem('omni_guest_user');
+            setLoggedOutState();
+            accountModal.classList.remove('open');
+        } finally {
+            setButtonLoading(btnSignOut, false);
         }
-        localStorage.removeItem('omni_guest_user');
-        setLoggedOutState();
     });
 
-    // Save API Keys
+    // Save API Keys with loading animation
     btnSaveApiKeys.addEventListener('click', () => {
-        aiDecisionEngine.setKeys({
-            openRouterKey: inputOpenRouterKey.value,
-            grokKey: inputGrokKey.value,
-            geminiKey: inputGeminiApiKey.value
-        });
-        alert('API keys updated successfully!');
-        accountModal.classList.remove('open');
+        setButtonLoading(btnSaveApiKeys, true, 'Saving...');
+        setTimeout(() => {
+            aiDecisionEngine.setKeys({
+                openRouterKey: inputOpenRouterKey.value,
+                grokKey: inputGrokKey.value,
+                geminiKey: inputGeminiApiKey.value
+            });
+            setButtonLoading(btnSaveApiKeys, false);
+            alert('API configuration saved successfully!');
+            accountModal.classList.remove('open');
+        }, 400);
     });
 
-    // Download setup.bat modal
+    // Download setup.bat modal with loading animation
     btnDownloadAgent.addEventListener('click', () => downloadModal.classList.add('open'));
     btnCloseDownloadModal.addEventListener('click', () => downloadModal.classList.remove('open'));
 
     btnDownloadBatFile.addEventListener('click', () => {
-        const batContent = `@echo off
+        setButtonLoading(btnDownloadBatFile, true, 'Preparing setup.bat...');
+        setTimeout(() => {
+            const batContent = `@echo off
 cd /d "%~dp0"
 title OmniNode AI - Universal PC and Android ADB Sync Agent
 echo [*] Launching OmniNode AI Agent...
@@ -560,17 +631,19 @@ if not exist "agent\\node_modules" pushd agent & call npm install --no-audit --n
 cd agent
 node agent.js
 pause`;
-        const blob = new Blob([batContent], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'setup.bat';
-        a.click();
+            const blob = new Blob([batContent], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'setup.bat';
+            a.click();
+            setButtonLoading(btnDownloadBatFile, false);
+            downloadModal.classList.remove('open');
+        }, 300);
     });
 }
 
 // Initial Boot
 setupEvents();
 checkAuthSession();
-initChatSessions();
 loadBackgroundData();
 setInterval(loadBackgroundData, 3500);
