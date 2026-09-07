@@ -1,0 +1,17 @@
+{
+  "name": "omninode-agent",
+  "version": "1.0.0",
+  "description": "OmniNode AI Unified Node.js Agent - PC & Android ADB Asset Sync",
+  "main": "agent.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node agent.js",
+    "dev": "node --watch agent.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "chokidar": "^4.0.3",
+    "dotenv": "^16.4.7",
+    "mime-types": "^2.1.35"
+  }
+}
