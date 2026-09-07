@@ -229,7 +229,7 @@ function renderMessages(messages) {
     chatStream.innerHTML = '';
 
     messages.forEach(msg => {
-        appendMessageElement(msg.role, msg.content, false);
+        appendMessageElement(msg.role, msg.content, false, msg.source_engine);
     });
 
     chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
@@ -269,7 +269,7 @@ function formatMarkdown(text) {
     return html;
 }
 
-function appendMessageElement(role, text, shouldScroll = true) {
+function appendMessageElement(role, text, shouldScroll = true, sourceEngine = null) {
     const row = document.createElement('div');
     row.className = `chat-message-row ${role}`;
 
@@ -283,7 +283,16 @@ function appendMessageElement(role, text, shouldScroll = true) {
     if (role === 'user') {
         bubble.textContent = text;
     } else {
-        bubble.innerHTML = formatMarkdown(text);
+        let contentHtml = formatMarkdown(text);
+        if (sourceEngine) {
+            contentHtml += `
+                <div class="tier-badge-pill">
+                    <span class="tier-dot"></span>
+                    <span>⚡ ${sourceEngine}</span>
+                </div>
+            `;
+        }
+        bubble.innerHTML = contentHtml;
     }
 
     if (role === 'user') {
@@ -366,8 +375,12 @@ async function handleSendMessage(promptText) {
             currentModelBadge.textContent = result.source_engine;
         }
 
-        session.messages.push({ role: 'assistant', content: result.reply });
-        appendMessageElement('assistant', result.reply, true);
+        session.messages.push({ 
+            role: 'assistant', 
+            content: result.reply,
+            source_engine: result.source_engine || 'OmniNode AI'
+        });
+        appendMessageElement('assistant', result.reply, true, result.source_engine);
         saveChatSessions();
 
         // Save AI decision asynchronously to Supabase
@@ -382,8 +395,8 @@ async function handleSendMessage(promptText) {
     } catch (err) {
         removeTypingIndicator();
         const fallbackMsg = "I'm having trouble reaching the reasoning engine right now. Please check your network or API keys in Settings.";
-        appendMessageElement('assistant', fallbackMsg, true);
-        session.messages.push({ role: 'assistant', content: fallbackMsg });
+        appendMessageElement('assistant', fallbackMsg, true, 'System Notice');
+        session.messages.push({ role: 'assistant', content: fallbackMsg, source_engine: 'System' });
         saveChatSessions();
     } finally {
         btnSendMessage.disabled = false;

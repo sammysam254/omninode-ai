@@ -315,6 +315,7 @@ Instructions:
 
     // ==========================================
     // UNIFIED CHAT DISPATCHER (CASCADE ROUTER)
+    // Order: Tier 1: OpenRouter Free -> Tier 2: Grok/Groq -> Tier 3: Zero-API Free -> Tier 4: Gemini -> Tier 5: Local
     // ==========================================
     async chat(userPrompt, allAssets = [], nodes = [], devices = []) {
         const relevantAssets = this.findRelevantAssets(userPrompt, allAssets);
@@ -327,29 +328,32 @@ Instructions:
 
         const systemPrompt = this.getSystemPrompt(context);
 
-        // 1. Try Groq (Fastest: ~300ms)
+        // 1. TIER 1: OpenRouter (All Free Models)
         try {
-            const res = await this.callGroq(systemPrompt, userPrompt);
+            const res = await this.callOpenRouter(systemPrompt, userPrompt);
+            res.tier = 'Tier 1';
             this.conversationHistory.push({ role: 'user', content: userPrompt });
             this.conversationHistory.push({ role: 'assistant', content: res.reply });
             return res;
         } catch (err1) {
-            console.warn('[Tier 1 Groq Failed]:', err1.message);
+            console.warn('[Tier 1 OpenRouter Failed]:', err1.message);
         }
 
-        // 2. Try OpenRouter (Free models)
+        // 2. TIER 2: Grok / Groq AI
         try {
-            const res = await this.callOpenRouter(systemPrompt, userPrompt);
+            const res = await this.callGroq(systemPrompt, userPrompt);
+            res.tier = 'Tier 2';
             this.conversationHistory.push({ role: 'user', content: userPrompt });
             this.conversationHistory.push({ role: 'assistant', content: res.reply });
             return res;
         } catch (err2) {
-            console.warn('[Tier 2 OpenRouter Failed]:', err2.message);
+            console.warn('[Tier 2 Grok/Groq Failed]:', err2.message);
         }
 
-        // 3. Try Zero-API Free Endpoint
+        // 3. TIER 3: Zero-API Free Endpoint
         try {
             const res = await this.callZeroApi(systemPrompt, userPrompt);
+            res.tier = 'Tier 3';
             this.conversationHistory.push({ role: 'user', content: userPrompt });
             this.conversationHistory.push({ role: 'assistant', content: res.reply });
             return res;
@@ -357,9 +361,10 @@ Instructions:
             console.warn('[Tier 3 Zero-API Failed]:', err3.message);
         }
 
-        // 4. Try Google Gemini API
+        // 4. TIER 4: Google Gemini API
         try {
             const res = await this.callGemini(systemPrompt, userPrompt);
+            res.tier = 'Tier 4';
             this.conversationHistory.push({ role: 'user', content: userPrompt });
             this.conversationHistory.push({ role: 'assistant', content: res.reply });
             return res;
@@ -367,8 +372,10 @@ Instructions:
             console.warn('[Tier 4 Gemini Failed]:', err4.message);
         }
 
-        // 5. Natural Conversational Offline Reasoner
+        // 5. TIER 5: Natural Conversational Offline Reasoner
         const localRes = this.evaluateLocally(userPrompt, relevantAssets, nodes, devices);
+        localRes.source_engine = 'Tier 5: OmniNode Local Reasoner';
+        localRes.tier = 'Tier 5';
         this.conversationHistory.push({ role: 'user', content: userPrompt });
         this.conversationHistory.push({ role: 'assistant', content: localRes.reply });
         return localRes;
