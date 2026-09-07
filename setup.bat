@@ -13,9 +13,8 @@ echo.
 
 set "REPO_URL=https://github.com/sammysam254/omninode-ai.git"
 
-:: Terminate any lingering previous OmniNode processes to prevent port conflicts or duplicate agents
-echo [*] Terminating any previous OmniNode instances...
-taskkill /F /FI "WINDOWTITLE eq OmniNode AI*" >nul 2>&1
+:: 0. Free port 5173 if previously occupied
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5173" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
 
 :: 1. Check Git and Bootstrap Repository if needed
 where git >nul 2>&1

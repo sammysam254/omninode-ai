@@ -11,9 +11,6 @@ echo          OmniNode AI - Universal PC and Android ADB Sync Agent
 echo =====================================================================
 echo.
 
-:: Clean up previous agent instances
-taskkill /F /FI "WINDOWTITLE eq OmniNode AI - Universal PC and Android ADB Sync Agent*" >nul 2>&1
-
 :: 1. Auto-Pull Latest Updates from GitHub
 where git >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
