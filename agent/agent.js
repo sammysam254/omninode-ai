@@ -357,7 +357,7 @@ async function syncAndroidDevices() {
 
         // 1. Sync attached device info to Supabase
         try {
-            await supabase.from('attached_devices').upsert({
+            const devUpsertPromise = supabase.from('attached_devices').upsert({
                 device_id: dev.device_id,
                 node_id: config.nodeId,
                 device_name: sanitizePgString(dev.device_name),
@@ -368,6 +368,8 @@ async function syncAndroidDevices() {
                 usb_debugging_status: dev.usb_debugging_status || 'authorized',
                 last_sync: new Date().toISOString()
             }, { onConflict: 'device_id' });
+            const devTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Device sync timeout')), 4000));
+            await Promise.race([devUpsertPromise, devTimeout]);
         } catch (err) {}
 
         if (dev.usb_debugging_status === 'authorized') {
