@@ -1,6 +1,8 @@
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
+const dns = require('dns');
+try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}
 const chokidar = require('chokidar');
 const { createClient } = require('@supabase/supabase-js');
 const AdbScanner = require('./adbScanner');
@@ -53,13 +55,14 @@ const config = {
     supabaseUrl: process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
     supabaseKey: process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY,
     nodeId: `node-${os.hostname().toLowerCase().replace(/[^a-z0-9]/g, '-')}-${os.arch()}`,
-    syncIntervalSeconds: 15,
+    syncIntervalSeconds: 2.5,
     watchPaths: discoverScanPaths()
 };
 
 // Initialize Supabase Client
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
-    auth: { persistSession: false }
+    auth: { persistSession: false },
+    realtime: { params: { eventsPerSecond: 20 } }
 });
 console.log(`\x1b[32m[Supabase Mesh]\x1b[0m Connected to: ${config.supabaseUrl}`);
 
@@ -387,23 +390,27 @@ async function startAgent() {
     console.log(`   Host: ${os.hostname()} | Node: ${config.nodeId}`);
     console.log(`=======================================================`);
 
-    // 1. Send Node Heartbeat
+    // 1. Send Node Heartbeat immediately
     await syncNodeHeartbeat();
 
     // 2. Scan and Connect Physical Android USB ADB Devices IMMEDIATELY
     await syncAndroidDevices();
 
-    // 3. Run Deep Initial Computer Crawl
-    await runInitialComputerCrawl();
-
-    // 4. Start Background Real-time Local File Watcher
+    // 3. Start Background Real-time Local File Watcher IMMEDIATELY
     startLocalFileWatcher();
 
-    // 5. Periodic Heartbeat and ADB scan every syncInterval
+    // 4. Periodic Heartbeat and ADB scan every 2.5s for real-time responsiveness
     setInterval(async () => {
         await syncNodeHeartbeat();
         await syncAndroidDevices();
     }, config.syncIntervalSeconds * 1000);
+
+    // 5. Run Deep Computer Crawl in background without blocking real-time events
+    setTimeout(() => {
+        runInitialComputerCrawl().catch(err => {
+            console.warn('[PC Deep Crawler Warning]:', err.message);
+        });
+    }, 500);
 }
 
 startAgent().catch(err => {
