@@ -5,352 +5,400 @@ import { aiDecisionEngine } from './aiDecisionEngine.js';
 let allNodes = [];
 let allDevices = [];
 let allAssets = [];
+let currentUser = null;
+
+// Chat Sessions State
+let chatSessions = JSON.parse(localStorage.getItem('omni_chat_sessions') || '[]');
+let currentSessionId = null;
 
 // DOM Elements
-const statNodesCount = document.getElementById('statNodesCount');
-const statAndroidCount = document.getElementById('statAndroidCount');
-const statAssetsCount = document.getElementById('statAssetsCount');
-const deviceMeshContainer = document.getElementById('deviceMeshContainer');
-const assetsTableBody = document.getElementById('assetsTableBody');
-const assetSearchInput = document.getElementById('assetSearchInput');
-const assetCategoryFilter = document.getElementById('assetCategoryFilter');
+const sidebar = document.getElementById('sidebar');
+const btnToggleSidebar = document.getElementById('btnToggleSidebar');
+const btnMobileMenu = document.getElementById('btnMobileMenu');
+const btnNewChat = document.getElementById('btnNewChat');
+const chatHistoryList = document.getElementById('chatHistoryList');
 
-// Chat Elements
+const meshStatusPill = document.getElementById('meshStatusPill');
+const meshStatusText = document.getElementById('meshStatusText');
+const currentModelBadge = document.getElementById('currentModelBadge');
+
+const userAccountBar = document.getElementById('userAccountBar');
+const userAvatar = document.getElementById('userAvatar');
+const userNameDisplay = document.getElementById('userNameDisplay');
+const userEmailDisplay = document.getElementById('userEmailDisplay');
+
+const welcomeHero = document.getElementById('welcomeHero');
+const chatScrollContainer = document.getElementById('chatScrollContainer');
 const chatStream = document.getElementById('chatStream');
 const chatInput = document.getElementById('chatInput');
 const btnSendMessage = document.getElementById('btnSendMessage');
-const btnClearChat = document.getElementById('btnClearChat');
-const liveModelIndicator = document.getElementById('liveModelIndicator');
+const btnClearCurrentChat = document.getElementById('btnClearCurrentChat');
 
 // Modals
-const configModal = document.getElementById('configModal');
-const downloadModal = document.getElementById('downloadModal');
-const assetViewerModal = document.getElementById('assetViewerModal');
-const btnOpenConfig = document.getElementById('btnOpenConfig');
-const btnCloseConfigModal = document.getElementById('btnCloseConfigModal');
-const btnCancelConfig = document.getElementById('btnCancelConfig');
-const btnSaveConfig = document.getElementById('btnSaveConfig');
-const inputOpenRouterKey = document.getElementById('inputOpenRouterKey');
-const inputGrokKey = document.getElementById('inputGrokKey');
-const inputGeminiApiKey = document.getElementById('inputGeminiApiKey');
-const inputSupabaseUrl = document.getElementById('inputSupabaseUrl');
-const inputSupabaseKey = document.getElementById('inputSupabaseKey');
+const accountModal = document.getElementById('accountModal');
+const btnAccountSettings = document.getElementById('btnAccountSettings');
+const btnCloseAccountModal = document.getElementById('btnCloseAccountModal');
+const tabAuth = document.getElementById('tabAuth');
+const tabApiKeys = document.getElementById('tabApiKeys');
+const paneAuth = document.getElementById('paneAuth');
+const paneApiKeys = document.getElementById('paneApiKeys');
 
+const authLoggedOutView = document.getElementById('authLoggedOutView');
+const authLoggedInView = document.getElementById('authLoggedInView');
+const authEmail = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const btnSignIn = document.getElementById('btnSignIn');
+const btnSignUp = document.getElementById('btnSignUp');
+const btnSignOut = document.getElementById('btnSignOut');
+const authErrorMsg = document.getElementById('authErrorMsg');
+const profileAvatar = document.getElementById('profileAvatar');
+const profileEmail = document.getElementById('profileEmail');
+
+const inputGrokKey = document.getElementById('inputGrokKey');
+const inputOpenRouterKey = document.getElementById('inputOpenRouterKey');
+const inputGeminiApiKey = document.getElementById('inputGeminiApiKey');
+const btnSaveApiKeys = document.getElementById('btnSaveApiKeys');
+
+const downloadModal = document.getElementById('downloadModal');
 const btnDownloadAgent = document.getElementById('btnDownloadAgent');
 const btnCloseDownloadModal = document.getElementById('btnCloseDownloadModal');
 const btnDownloadBatFile = document.getElementById('btnDownloadBatFile');
 
-const btnCloseAssetViewer = document.getElementById('btnCloseAssetViewer');
-const viewerTitle = document.getElementById('viewerTitle');
-const viewerOriginBadge = document.getElementById('viewerOriginBadge');
-const viewerContent = document.getElementById('viewerContent');
-const viewerMetadata = document.getElementById('viewerMetadata');
+// Load Background Data from Supabase
+async function loadBackgroundData() {
+    try {
+        allNodes = await supabaseService.getNodes();
+        allDevices = await supabaseService.getAttachedDevices();
+        allAssets = await supabaseService.getAssets();
 
-// Load Real Data from Supabase
-async function loadData() {
-    allNodes = await supabaseService.getNodes();
-    allDevices = await supabaseService.getAttachedDevices();
-    allAssets = await supabaseService.getAssets();
+        // Update silent status pill
+        const pcCount = allNodes.length;
+        const devCount = allDevices.length;
+        const assetCount = allAssets.length;
 
-    renderStats();
-    renderDeviceMesh();
-    renderAssetsTable();
-}
-
-function renderStats() {
-    statNodesCount.textContent = allNodes.length;
-    statAndroidCount.textContent = allDevices.length;
-    statAssetsCount.textContent = allAssets.length;
-}
-
-function renderDeviceMesh() {
-    deviceMeshContainer.innerHTML = '';
-
-    if (allNodes.length === 0) {
-        deviceMeshContainer.innerHTML = `
-            <div class="empty-state-box" style="grid-column: 1 / -1;">
-                <div class="empty-state-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-                </div>
-                <div style="font-weight: 700; font-size: 1.05rem;">No Host PCs Connected Yet</div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); max-width: 500px;">
-                    Download and run <b>setup.bat</b> on any Windows PC or laptop. It will register here in real time and begin syncing your local folders and USB Android devices.
-                </div>
-                <button class="btn btn-primary" style="margin-top: 0.5rem;" onclick="document.getElementById('downloadModal').classList.add('open')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Download setup.bat
-                </button>
-            </div>
-        `;
-        return;
-    }
-
-    allNodes.forEach(node => {
-        const attachedMobile = allDevices.filter(d => d.node_id === node.node_id);
-        const nodeAssets = allAssets.filter(a => a.node_id === node.node_id);
-
-        const card = document.createElement('div');
-        card.className = 'node-card';
-
-        let mobileDevicesHtml = '';
-        if (attachedMobile.length > 0) {
-            mobileDevicesHtml = `
-                <div class="attached-android-section">
-                    <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">
-                        Attached Mobile Devices (USB Debugging):
-                    </div>
-                    ${attachedMobile.map(dev => `
-                        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 6px;">
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <span class="android-badge">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
-                                    ${dev.device_name}
-                                </span>
-                            </div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted);">
-                                🔋 ${dev.battery_level}% | ${dev.android_version}
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+        if (pcCount > 0 || devCount > 0) {
+            meshStatusText.textContent = `Synced: ${pcCount} PC${pcCount !== 1 ? 's' : ''}, ${devCount} Android, ${assetCount} Assets`;
+            meshStatusPill.style.color = 'var(--accent-emerald)';
         } else {
-            mobileDevicesHtml = `
-                <div style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px;">
-                    🔌 No Android phone plugged in via USB debugging on this PC yet.
-                </div>
-            `;
+            meshStatusText.textContent = 'Mesh Ready (Run setup.bat to sync)';
+            meshStatusPill.style.color = 'var(--text-muted)';
         }
+    } catch (e) {
+        console.warn('Silent mesh background poll:', e.message);
+    }
+}
 
-        card.innerHTML = `
-            <div class="node-header">
-                <div class="node-title-group">
-                    <div class="node-type-icon">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-                    </div>
-                    <div>
-                        <div style="font-weight: 700; font-size: 1.05rem;">${node.hostname}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">${node.ip_address || '127.0.0.1'} · ${node.os_info || 'Unknown OS'}</div>
-                    </div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--accent-emerald);">
-                    <span class="pulse-indicator"></span>
-                    <span>ONLINE</span>
-                </div>
-            </div>
+// User Authentication
+async function checkAuthSession() {
+    if (supabaseService.client) {
+        try {
+            const { data } = await supabaseService.client.auth.getSession();
+            if (data?.session?.user) {
+                setLoggedInUser(data.session.user);
+                return;
+            }
+        } catch (e) {}
+    }
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 8px; font-size: 0.8rem;">
-                <div><span style="color: var(--text-muted);">RAM:</span> ${node.storage_stats?.free_memory_gb || '8'}GB Free / ${node.storage_stats?.total_memory_gb || '16'}GB</div>
-                <div><span style="color: var(--text-muted);">Synced Assets:</span> <b style="color: var(--accent-cyan);">${nodeAssets.length}</b></div>
-            </div>
+    // Default Guest state
+    const localGuest = localStorage.getItem('omni_guest_user');
+    if (localGuest) {
+        setLoggedInUser(JSON.parse(localGuest));
+    } else {
+        setLoggedOutState();
+    }
+}
 
-            ${mobileDevicesHtml}
-        `;
+function setLoggedInUser(user) {
+    currentUser = user;
+    const initial = (user.email ? user.email.charAt(0).toUpperCase() : 'U');
+    userAvatar.textContent = initial;
+    profileAvatar.textContent = initial;
+    userNameDisplay.textContent = user.user_metadata?.full_name || user.email.split('@')[0];
+    userEmailDisplay.textContent = user.email;
+    profileEmail.textContent = user.email;
 
-        deviceMeshContainer.appendChild(card);
+    authLoggedOutView.style.display = 'none';
+    authLoggedInView.style.display = 'block';
+}
+
+function setLoggedOutState() {
+    currentUser = null;
+    userAvatar.textContent = 'G';
+    profileAvatar.textContent = 'G';
+    userNameDisplay.textContent = 'Guest User';
+    userEmailDisplay.textContent = 'Click to sign in / create account';
+
+    authLoggedOutView.style.display = 'block';
+    authLoggedInView.style.display = 'none';
+}
+
+// Chat Session Management
+function initChatSessions() {
+    if (chatSessions.length === 0) {
+        createNewChatSession(false);
+    } else {
+        loadChatSession(chatSessions[0].id);
+    }
+    renderChatHistorySidebar();
+}
+
+function createNewChatSession(shouldFocus = true) {
+    const newSession = {
+        id: 'session_' + Date.now(),
+        title: 'New Chat',
+        messages: [],
+        createdAt: new Date().toISOString()
+    };
+
+    chatSessions.unshift(newSession);
+    saveChatSessions();
+    loadChatSession(newSession.id);
+    renderChatHistorySidebar();
+
+    if (shouldFocus) {
+        chatInput.focus();
+    }
+}
+
+function loadChatSession(sessionId) {
+    currentSessionId = sessionId;
+    const session = chatSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    aiDecisionEngine.setHistory(session.messages.map(m => ({
+        role: m.role,
+        content: m.content
+    })));
+
+    renderMessages(session.messages);
+    renderChatHistorySidebar();
+}
+
+function deleteChatSession(sessionId, e) {
+    if (e) e.stopPropagation();
+    chatSessions = chatSessions.filter(s => s.id !== sessionId);
+    saveChatSessions();
+
+    if (chatSessions.length === 0) {
+        createNewChatSession(false);
+    } else if (currentSessionId === sessionId) {
+        loadChatSession(chatSessions[0].id);
+    } else {
+        renderChatHistorySidebar();
+    }
+}
+
+function saveChatSessions() {
+    localStorage.setItem('omni_chat_sessions', JSON.stringify(chatSessions));
+}
+
+function renderChatHistorySidebar() {
+    chatHistoryList.innerHTML = '';
+
+    chatSessions.forEach(session => {
+        const item = document.createElement('div');
+        item.className = `chat-history-item ${session.id === currentSessionId ? 'active' : ''}`;
+        
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'chat-history-title';
+        titleSpan.textContent = session.title || 'Conversation';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'chat-history-delete';
+        deleteBtn.title = 'Delete conversation';
+        deleteBtn.innerHTML = '&times;';
+        deleteBtn.onclick = (e) => deleteChatSession(session.id, e);
+
+        item.onclick = () => loadChatSession(session.id);
+        item.appendChild(titleSpan);
+        item.appendChild(deleteBtn);
+        chatHistoryList.appendChild(item);
     });
 }
 
-function renderAssetsTable() {
-    const query = (assetSearchInput.value || '').toLowerCase();
-    const category = assetCategoryFilter.value;
-
-    const filtered = allAssets.filter(asset => {
-        const matchesQuery = query === '' || 
-            asset.name.toLowerCase().includes(query) ||
-            (asset.extracted_text || '').toLowerCase().includes(query) ||
-            asset.file_path.toLowerCase().includes(query);
-        const matchesCategory = category === 'all' || asset.asset_category === category;
-        return matchesQuery && matchesCategory;
-    });
-
-    assetsTableBody.innerHTML = '';
-
-    if (filtered.length === 0) {
-        assetsTableBody.innerHTML = `
-            <tr>
-                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--text-muted);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                        <span>No assets indexed in Supabase yet. Run <code>setup.bat</code> on your PC to begin syncing.</span>
-                    </div>
-                </td>
-            </tr>
-        `;
+// Render Messages & Markdown Formatter
+function renderMessages(messages) {
+    if (!messages || messages.length === 0) {
+        welcomeHero.style.display = 'flex';
+        chatStream.innerHTML = '';
         return;
     }
 
-    filtered.forEach(asset => {
-        const tr = document.createElement('tr');
-        tr.className = 'asset-row';
+    welcomeHero.style.display = 'none';
+    chatStream.innerHTML = '';
 
-        const sizeKb = asset.file_size_bytes ? (asset.file_size_bytes / 1024).toFixed(1) + ' KB' : 'Text';
-        const isMobile = asset.device_type === 'android';
-
-        tr.innerHTML = `
-            <td>
-                <div style="font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                    ${isMobile ? '📱' : '📄'} ${asset.name}
-                </div>
-            </td>
-            <td>
-                <span class="chip" style="font-size: 0.7rem; ${isMobile ? 'border-color: rgba(16,185,129,0.4); color: #34D399;' : ''}">
-                    ${isMobile ? 'Android (USB ADB)' : 'Host PC Storage'}
-                </span>
-            </td>
-            <td><span style="text-transform: capitalize; font-size: 0.8rem; color: var(--text-secondary);">${asset.asset_category}</span></td>
-            <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${sizeKb}</td>
-            <td style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${asset.file_path}">
-                ${asset.file_path}
-            </td>
-            <td>
-                <button class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem;" data-asset-id="${asset.id || asset.asset_uid}">Inspect</button>
-            </td>
-        `;
-
-        tr.querySelector('button').addEventListener('click', () => openAssetViewer(asset));
-        assetsTableBody.appendChild(tr);
+    messages.forEach(msg => {
+        appendMessageElement(msg.role, msg.content, false);
     });
+
+    chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
 }
 
-function openAssetViewer(asset) {
-    viewerTitle.textContent = asset.name;
-    const isMobile = asset.device_type === 'android';
-    viewerOriginBadge.innerHTML = `
-        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-            <span class="chip" style="font-size: 0.75rem;">Node: ${asset.node_id}</span>
-            <span class="chip" style="${isMobile ? 'color: #34D399; border-color: rgba(16,185,129,0.4);' : ''}">${isMobile ? '📱 Android USB Attached' : '🖥️ Host Computer'}</span>
+function formatMarkdown(text) {
+    if (!text) return '';
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // Code Blocks
+    html = html.replace(/```([a-z]*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+
+    // Inline Code
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Bold & Italics
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // Blockquotes
+    html = html.replace(/^>\s?(.*)$/gm, '<blockquote style="border-left: 3px solid var(--gemini-blue); padding-left: 10px; margin: 6px 0; color: var(--text-secondary);">$1</blockquote>');
+
+    // Headers
+    html = html.replace(/^### (.*$)/gim, '<h3 style="font-size: 1.05rem; margin: 0.75rem 0 0.35rem 0; color: var(--text-main);">$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2 style="font-size: 1.15rem; margin: 0.9rem 0 0.4rem 0; color: var(--text-main);">$1</h2>');
+
+    // Bullet Lists
+    html = html.replace(/^\s*-\s+(.*)$/gim, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>)/s, '<ul style="margin: 0.5rem 0 0.5rem 1.25rem;">$1</ul>');
+
+    // Newlines to Paragraphs
+    html = html.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+
+    return html;
+}
+
+function appendMessageElement(role, text, shouldScroll = true) {
+    const row = document.createElement('div');
+    row.className = `chat-message-row ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = `chat-avatar ${role}`;
+    avatar.textContent = role === 'user' ? (currentUser ? currentUser.email.charAt(0).toUpperCase() : 'U') : '✦';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+
+    if (role === 'user') {
+        bubble.textContent = text;
+    } else {
+        bubble.innerHTML = formatMarkdown(text);
+    }
+
+    if (role === 'user') {
+        row.appendChild(bubble);
+        row.appendChild(avatar);
+    } else {
+        row.appendChild(avatar);
+        row.appendChild(bubble);
+    }
+
+    chatStream.appendChild(row);
+
+    if (shouldScroll) {
+        chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
+    }
+
+    return row;
+}
+
+function showTypingIndicator() {
+    const row = document.createElement('div');
+    row.className = 'chat-message-row assistant typing-row';
+    row.id = 'typingIndicatorRow';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'chat-avatar assistant';
+    avatar.textContent = '✦';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = `
+        <div class="typing-dots">
+            <span></span><span></span><span></span>
         </div>
     `;
-    viewerContent.textContent = asset.extracted_text || 'No text content available.';
-    viewerMetadata.textContent = JSON.stringify(asset.metadata || {}, null, 2);
-    assetViewerModal.classList.add('open');
+
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    chatStream.appendChild(row);
+    chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
 }
 
-// Conversational Chat Studio Handler
-async function handleSendMessage() {
-    const text = chatInput.value.trim();
-    if (!text) return;
+function removeTypingIndicator() {
+    const typingRow = document.getElementById('typingIndicatorRow');
+    if (typingRow) typingRow.remove();
+}
+
+// Send Message Handler
+async function handleSendMessage(promptText) {
+    const prompt = (promptText || chatInput.value).trim();
+    if (!prompt) return;
 
     chatInput.value = '';
+    chatInput.style.height = 'auto';
+
+    const session = chatSessions.find(s => s.id === currentSessionId);
+    if (!session) return;
+
+    // First prompt becomes the title of the chat
+    if (session.messages.length === 0) {
+        session.title = prompt.length > 28 ? prompt.substring(0, 28) + '...' : prompt;
+        renderChatHistorySidebar();
+    }
+
+    welcomeHero.style.display = 'none';
 
     // Append User Message
-    const userMsg = document.createElement('div');
-    userMsg.className = 'chat-msg user';
-    userMsg.innerHTML = `
-        <div class="chat-avatar">👤</div>
-        <div class="chat-bubble">
-            <p>${escapeHtml(text)}</p>
-        </div>
-    `;
-    chatStream.appendChild(userMsg);
-    chatStream.scrollTop = chatStream.scrollHeight;
-
-    // Append Typing Indicator
-    const typingMsg = document.createElement('div');
-    typingMsg.className = 'chat-msg assistant';
-    typingMsg.id = 'typingIndicator';
-    typingMsg.innerHTML = `
-        <div class="chat-avatar">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
-        </div>
-        <div class="chat-bubble" style="display: flex; align-items: center; gap: 8px; color: var(--text-muted);">
-            <span class="pulse-indicator"></span>
-            <span>Reasoning across connected devices...</span>
-        </div>
-    `;
-    chatStream.appendChild(typingMsg);
-    chatStream.scrollTop = chatStream.scrollHeight;
+    session.messages.push({ role: 'user', content: prompt });
+    appendMessageElement('user', prompt, true);
+    saveChatSessions();
 
     btnSendMessage.disabled = true;
+    showTypingIndicator();
 
     try {
-        const response = await aiDecisionEngine.sendMessage(text, allAssets, allNodes, allDevices);
+        const result = await aiDecisionEngine.chat(prompt, allAssets, allNodes, allDevices);
+        removeTypingIndicator();
 
-        // Remove typing indicator
-        const typingEl = document.getElementById('typingIndicator');
-        if (typingEl) typingEl.remove();
-
-        // Format citations
-        let citationsHtml = '';
-        if (response.cited_assets && response.cited_assets.length > 0) {
-            citationsHtml = `
-                <div class="chat-citations-box">
-                    <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Grounded in Live Device Evidence:</div>
-                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-                        ${response.cited_assets.slice(0, 4).map(a => `
-                            <span class="citation-chip" title="${a.file_path}">
-                                ${a.device_type === 'android' ? '📱' : '🖥️'} ${a.name}
-                            </span>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
+        if (result.source_engine) {
+            currentModelBadge.textContent = result.source_engine;
         }
 
-        // Append Assistant Message
-        const assistantMsg = document.createElement('div');
-        assistantMsg.className = 'chat-msg assistant';
-        assistantMsg.innerHTML = `
-            <div class="chat-avatar">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
-            </div>
-            <div class="chat-bubble">
-                <div>${formatMarkdown(response.reply)}</div>
-                ${citationsHtml}
-                <div class="chat-model-badge">
-                    ⚡ ${response.source_engine || 'AI Engine'}
-                </div>
-            </div>
-        `;
-        chatStream.appendChild(assistantMsg);
-        chatStream.scrollTop = chatStream.scrollHeight;
+        session.messages.push({ role: 'assistant', content: result.reply });
+        appendMessageElement('assistant', result.reply, true);
+        saveChatSessions();
 
-        if (liveModelIndicator) {
-            liveModelIndicator.textContent = response.source_engine || 'Active';
-        }
+        // Save AI decision asynchronously to Supabase
+        supabaseService.saveDecision({
+            node_id: allNodes[0]?.node_id || 'web-client',
+            decision_type: 'conversational_query',
+            context: { prompt, user_id: currentUser?.id || 'guest' },
+            decision_payload: { response: result.reply, engine: result.source_engine },
+            confidence_score: 0.98
+        });
 
     } catch (err) {
-        const typingEl = document.getElementById('typingIndicator');
-        if (typingEl) typingEl.remove();
-
-        const errorMsg = document.createElement('div');
-        errorMsg.className = 'chat-msg assistant';
-        errorMsg.innerHTML = `
-            <div class="chat-avatar" style="color: #EF4444;">⚠️</div>
-            <div class="chat-bubble" style="border-color: rgba(239, 68, 68, 0.4);">
-                <p style="color: #F87171;"><b>AI Communication Error:</b> ${err.message}</p>
-            </div>
-        `;
-        chatStream.appendChild(errorMsg);
+        removeTypingIndicator();
+        const fallbackMsg = "I'm having trouble reaching the reasoning engine right now. Please check your network or API keys in Settings.";
+        appendMessageElement('assistant', fallbackMsg, true);
+        session.messages.push({ role: 'assistant', content: fallbackMsg });
+        saveChatSessions();
     } finally {
         btnSendMessage.disabled = false;
         chatInput.focus();
     }
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function formatMarkdown(text) {
-    if (!text) return '';
-    // Format bold, backticks, bullet points, headers
-    let html = escapeHtml(text);
-    html = html.replace(/### (.*?)\n/g, '<h4 style="color: #38BDF8; margin: 0.5rem 0;">$1</h4>');
-    html = html.replace(/## (.*?)\n/g, '<h3 style="color: #FFF; margin: 0.6rem 0;">$1</h3>');
-    html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-    html = html.replace(/\n- (.*?)/g, '<br/>• $1');
-    html = html.replace(/\n/g, '<br/>');
-    return html;
-}
-
-// Setup Event Listeners
+// Event Listeners Setup
 function setupEvents() {
-    btnSendMessage.addEventListener('click', handleSendMessage);
+    // Textarea auto-expansion and Enter to submit
+    chatInput.addEventListener('input', () => {
+        chatInput.style.height = 'auto';
+        chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+    });
+
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -358,99 +406,144 @@ function setupEvents() {
         }
     });
 
-    btnClearChat.addEventListener('click', () => {
-        aiDecisionEngine.clearHistory();
-        chatStream.innerHTML = `
-            <div class="chat-msg assistant">
-                <div class="chat-avatar">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
-                </div>
-                <div class="chat-bubble">
-                    <p>✨ Conversation cleared. Ask any cross-device decision question to begin.</p>
-                </div>
-            </div>
-        `;
+    btnSendMessage.addEventListener('click', () => handleSendMessage());
+
+    btnNewChat.addEventListener('click', () => createNewChatSession(true));
+
+    btnClearCurrentChat.addEventListener('click', () => {
+        const session = chatSessions.find(s => s.id === currentSessionId);
+        if (session) {
+            session.messages = [];
+            session.title = 'New Chat';
+            aiDecisionEngine.clearHistory();
+            saveChatSessions();
+            renderMessages([]);
+            renderChatHistorySidebar();
+        }
     });
 
-    document.querySelectorAll('.chip[data-quick]').forEach(chip => {
-        chip.addEventListener('click', () => {
-            chatInput.value = chip.getAttribute('data-quick');
-            handleSendMessage();
+    // Sidebar Toggles
+    btnToggleSidebar.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+    });
+
+    btnMobileMenu.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+    });
+
+    // Suggestion Cards Click
+    document.querySelectorAll('.suggestion-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const prompt = card.getAttribute('data-prompt');
+            if (prompt) handleSendMessage(prompt);
         });
     });
 
-    assetSearchInput.addEventListener('input', renderAssetsTable);
-    assetCategoryFilter.addEventListener('change', renderAssetsTable);
+    // Account & Settings Modal
+    userAccountBar.addEventListener('click', () => accountModal.classList.add('open'));
+    btnAccountSettings.addEventListener('click', (e) => {
+        e.stopPropagation();
+        accountModal.classList.add('open');
+    });
+    btnCloseAccountModal.addEventListener('click', () => accountModal.classList.remove('open'));
 
-    // Settings Modal (Auto-loads from Netlify Environment Variables & LocalStorage)
-    btnOpenConfig.addEventListener('click', () => {
-        inputOpenRouterKey.value = localStorage.getItem('omni_openrouter_key') || import.meta.env.VITE_OPENROUTER_API_KEY || '';
-        inputGrokKey.value = localStorage.getItem('omni_grok_key') || import.meta.env.VITE_GROK_API_KEY || '';
-        inputGeminiApiKey.value = localStorage.getItem('omni_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
-        inputSupabaseUrl.value = localStorage.getItem('omni_supabase_url') || import.meta.env.VITE_SUPABASE_URL || 'https://xfednxvbjzfssxyaurbc.supabase.co';
-        inputSupabaseKey.value = localStorage.getItem('omni_supabase_key') || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-        configModal.classList.add('open');
+    tabAuth.addEventListener('click', () => {
+        tabAuth.classList.add('active');
+        tabApiKeys.classList.remove('active');
+        paneAuth.classList.add('active');
+        paneApiKeys.classList.remove('active');
     });
 
-    btnCloseConfigModal.addEventListener('click', () => configModal.classList.remove('open'));
-    btnCancelConfig.addEventListener('click', () => configModal.classList.remove('open'));
+    tabApiKeys.addEventListener('click', () => {
+        tabApiKeys.classList.add('active');
+        tabAuth.classList.remove('active');
+        paneApiKeys.classList.add('active');
+        paneAuth.classList.remove('active');
+    });
 
-    btnSaveConfig.addEventListener('click', () => {
+    // Authentication Actions
+    btnSignUp.addEventListener('click', async () => {
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+        authErrorMsg.textContent = '';
+
+        if (!email || !password) {
+            authErrorMsg.textContent = 'Please enter email and password.';
+            return;
+        }
+
+        if (supabaseService.client) {
+            const { data, error } = await supabaseService.client.auth.signUp({ email, password });
+            if (error) {
+                authErrorMsg.textContent = error.message;
+            } else {
+                setLoggedInUser(data.user || { email });
+                accountModal.classList.remove('open');
+            }
+        } else {
+            const guest = { email, id: 'user_' + Date.now() };
+            localStorage.setItem('omni_guest_user', JSON.stringify(guest));
+            setLoggedInUser(guest);
+            accountModal.classList.remove('open');
+        }
+    });
+
+    btnSignIn.addEventListener('click', async () => {
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+        authErrorMsg.textContent = '';
+
+        if (!email || !password) {
+            authErrorMsg.textContent = 'Please enter email and password.';
+            return;
+        }
+
+        if (supabaseService.client) {
+            const { data, error } = await supabaseService.client.auth.signInWithPassword({ email, password });
+            if (error) {
+                authErrorMsg.textContent = error.message;
+            } else {
+                setLoggedInUser(data.user);
+                accountModal.classList.remove('open');
+            }
+        } else {
+            const guest = { email, id: 'user_' + Date.now() };
+            localStorage.setItem('omni_guest_user', JSON.stringify(guest));
+            setLoggedInUser(guest);
+            accountModal.classList.remove('open');
+        }
+    });
+
+    btnSignOut.addEventListener('click', async () => {
+        if (supabaseService.client) {
+            await supabaseService.client.auth.signOut();
+        }
+        localStorage.removeItem('omni_guest_user');
+        setLoggedOutState();
+    });
+
+    // Save API Keys
+    btnSaveApiKeys.addEventListener('click', () => {
         aiDecisionEngine.setKeys({
             openRouterKey: inputOpenRouterKey.value,
             grokKey: inputGrokKey.value,
             geminiKey: inputGeminiApiKey.value
         });
-        supabaseService.setCredentials(inputSupabaseUrl.value, inputSupabaseKey.value);
-        configModal.classList.remove('open');
-        loadData();
+        alert('API keys updated successfully!');
+        accountModal.classList.remove('open');
     });
 
-    // Download Modal
+    // Download setup.bat modal
     btnDownloadAgent.addEventListener('click', () => downloadModal.classList.add('open'));
     btnCloseDownloadModal.addEventListener('click', () => downloadModal.classList.remove('open'));
 
     btnDownloadBatFile.addEventListener('click', () => {
         const batContent = `@echo off
-setlocal enabledelayedexpansion
-title OmniNode AI - Universal Launcher
-echo =====================================================================
-echo          OmniNode AI - Universal Setup & Launcher
-echo =====================================================================
-set "REPO_URL=https://github.com/sammysam254/omninode-ai.git"
-
-where git >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    if not exist "web" (
-        echo [*] Fresh install: Cloning OmniNode AI from GitHub...
-        git clone %REPO_URL% temp_clone
-        if exist "temp_clone" (
-            xcopy /E /Y /Q temp_clone\\* . >nul
-            rmdir /S /Q temp_clone
-        )
-    ) else if exist ".git" (
-        echo [*] Pulling latest updates from GitHub...
-        git pull origin main --quiet 2>nul
-    )
-)
-
-where node >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [*] Installing Node.js LTS via winget...
-    winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
-)
-
-if not exist "agent\\node_modules" (
-    pushd agent & call npm install --no-audit --no-fund & popd
-)
-if not exist "web\\node_modules" (
-    pushd web & call npm install --no-audit --no-fund & popd
-)
-
-start "OmniNode AI Dashboard" cmd /c "cd web && npm run dev"
-timeout /t 3 /nobreak >nul
-start http://localhost:5173
-
+cd /d "%~dp0"
+title OmniNode AI - Universal PC and Android ADB Sync Agent
+echo [*] Launching OmniNode AI Agent...
+where git >nul 2>&1 && if exist ".git" git pull origin main --quiet
+if not exist "agent\\node_modules" pushd agent & call npm install --no-audit --no-fund & popd
 cd agent
 node agent.js
 pause`;
@@ -460,16 +553,11 @@ pause`;
         a.download = 'setup.bat';
         a.click();
     });
-
-    btnCloseAssetViewer.addEventListener('click', () => assetViewerModal.classList.remove('open'));
-
-    // Real-time listener
-    supabaseService.subscribeToChanges(() => {
-        loadData();
-    });
 }
 
 // Initial Boot
 setupEvents();
-loadData();
-setInterval(loadData, 3500);
+checkAuthSession();
+initChatSessions();
+loadBackgroundData();
+setInterval(loadBackgroundData, 3500);

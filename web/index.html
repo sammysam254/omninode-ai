@@ -3,294 +3,226 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OmniNode AI - Multi-Device Autonomous Decision System</title>
+  <title>OmniNode AI - Cross-Device Intelligent Copilot</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./src/style.css" />
 </head>
-<body>
-  <!-- Header -->
-  <header class="navbar">
-    <div class="brand">
-      <div class="brand-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
-          <path d="m4.93 4.93 2.12 2.12m9.9 9.9 2.12 2.12M4.93 19.07l2.12-2.12m9.9-9.9 2.12-2.12"></path>
-        </svg>
-      </div>
-      <div>
-        <div class="brand-title">OmniNode AI</div>
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span class="pulse-indicator"></span>
-          <span style="font-size: 0.7rem; color: var(--text-secondary);" id="meshStatusText">Mesh Active (Supabase Realtime)</span>
-          <span class="brand-tag">v2.0</span>
-        </div>
-      </div>
-    </div>
-    <div class="nav-actions">
-      <button class="btn btn-emerald" id="btnDownloadAgent">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-        <span>Download setup.bat</span>
-      </button>
-      <button class="btn btn-secondary" id="btnOpenConfig">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-        <span>Settings</span>
-      </button>
-    </div>
-  </header>
+<body class="gemini-theme">
 
-  <main class="container">
-    <!-- Stats Ribbon -->
-    <div class="stats-ribbon">
-      <div class="stat-card">
-        <div class="stat-info">
-          <div class="stat-label">Host PCs Connected</div>
-          <div class="stat-value" id="statNodesCount">0</div>
-        </div>
-        <div class="stat-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info">
-          <div class="stat-label">Android USB ADB Devices</div>
-          <div class="stat-value" id="statAndroidCount">0</div>
-        </div>
-        <div class="stat-icon" style="color: var(--accent-emerald);">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info">
-          <div class="stat-label">Aggregated Assets</div>
-          <div class="stat-value" id="statAssetsCount">0</div>
-        </div>
-        <div class="stat-icon" style="color: var(--accent-purple);">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info">
-          <div class="stat-label">AI Decision Engine</div>
-          <div class="stat-value" style="color: #34D399;">Gemini Active</div>
-        </div>
-        <div class="stat-icon" style="color: var(--accent-amber);">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-        </div>
-      </div>
-    </div>
-
-    <!-- Conversational AI Decision Copilot Studio -->
-    <section class="ai-chat-card">
-      <div class="chat-header">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <div class="stat-icon" style="width: 32px; height: 32px; border-radius: 8px;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+  <div class="app-layout">
+    <!-- Left Sidebar (Gemini Style) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <div class="brand-row">
+          <div class="brand-logo">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
+              <path d="m4.93 4.93 2.12 2.12m9.9 9.9 2.12 2.12M4.93 19.07l2.12-2.12m9.9-9.9 2.12-2.12"></path>
+            </svg>
           </div>
-          <div>
-            <div style="font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 6px;">
-              <span>OmniNode Cross-Device AI Copilot</span>
-              <span class="chip" style="font-size: 0.65rem; color: var(--accent-emerald); border-color: rgba(16,185,129,0.4);" id="liveModelIndicator">OpenRouter Free</span>
+          <span class="brand-name">OmniNode AI</span>
+          <button class="icon-btn toggle-sidebar-btn" id="btnToggleSidebar" title="Toggle Sidebar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
+        </div>
+
+        <button class="new-chat-btn" id="btnNewChat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>New chat</span>
+        </button>
+      </div>
+
+      <!-- Chat History -->
+      <div class="sidebar-scrollable">
+        <div class="history-section-title">Recent Chats</div>
+        <div class="chat-history-list" id="chatHistoryList">
+          <!-- Dynamically populated conversations -->
+        </div>
+      </div>
+
+      <!-- Sidebar Footer (User Account & Mesh Telemetry) -->
+      <div class="sidebar-footer">
+        <!-- Live Silent Mesh Status Indicator -->
+        <div class="mesh-status-pill" id="meshStatusPill" title="Real-time Cross-Device Mesh Active">
+          <span class="pulse-dot"></span>
+          <span id="meshStatusText">Mesh Synced (PC & Android)</span>
+        </div>
+
+        <!-- User Account Profile Bar -->
+        <div class="user-account-bar" id="userAccountBar">
+          <div class="user-avatar" id="userAvatar">U</div>
+          <div class="user-info">
+            <div class="user-name" id="userNameDisplay">Guest User</div>
+            <div class="user-email" id="userEmailDisplay">Click to sign in / create account</div>
+          </div>
+          <button class="icon-btn" id="btnAccountSettings" title="Account & Settings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace (Gemini Chat Studio) -->
+    <main class="chat-workspace">
+      <!-- Top Mobile / Floating Bar -->
+      <div class="workspace-header">
+        <button class="icon-btn mobile-menu-btn" id="btnMobileMenu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <div class="active-model-title">
+          <span>OmniNode Copilot</span>
+          <span class="model-badge" id="currentModelBadge">High Speed AI</span>
+        </div>
+        <div class="header-right-actions">
+          <button class="btn btn-subtle" id="btnDownloadAgent" title="Download setup.bat to sync any PC or phone">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Sync Agent</span>
+          </button>
+          <button class="icon-btn" id="btnClearCurrentChat" title="Clear Chat">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat Messages Container -->
+      <div class="chat-scroll-container" id="chatScrollContainer">
+        <!-- Welcome Hero View (Shown on Empty / New Chat) -->
+        <div class="welcome-hero" id="welcomeHero">
+          <div class="gemini-sparkle-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+            </svg>
+          </div>
+          <h1 class="welcome-heading">
+            <span class="gradient-text">Hello,</span> How can I help you today?
+          </h1>
+          <p class="welcome-subtext">
+            I am your cross-device AI copilot. Ask me about your computer files, code, MPESA transactions, or connected mobile phones.
+          </p>
+
+          <!-- Suggestion Cards -->
+          <div class="suggestion-grid">
+            <div class="suggestion-card" data-prompt="What mobile phone and PC devices are currently connected?">
+              <div class="suggestion-icon">📱</div>
+              <div class="suggestion-text">What devices and phones are connected?</div>
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-secondary);">Ask questions, verify invoices, analyze phone SMS & chat logs across all connected devices</div>
+            <div class="suggestion-card" data-prompt="Show my latest MPESA or banking SMS messages">
+              <div class="suggestion-icon">💳</div>
+              <div class="suggestion-text">Check recent MPESA and mobile SMS alerts</div>
+            </div>
+            <div class="suggestion-card" data-prompt="List all recent documents and PDF files indexed across my computer">
+              <div class="suggestion-icon">📄</div>
+              <div class="suggestion-text">Find recent invoices and PDF documents</div>
+            </div>
+            <div class="suggestion-card" data-prompt="Summarize my project files and active workspace code">
+              <div class="suggestion-icon">💻</div>
+              <div class="suggestion-text">Overview indexed workspace & code files</div>
+            </div>
           </div>
         </div>
-        <div style="display: flex; gap: 0.5rem;">
-          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" id="btnClearChat">Clear Chat</button>
+
+        <!-- Message Stream -->
+        <div class="chat-message-stream" id="chatStream"></div>
+      </div>
+
+      <!-- Bottom Floating Gemini Input Area -->
+      <div class="input-area-wrapper">
+        <div class="input-box-container">
+          <textarea 
+            id="chatInput" 
+            class="gemini-textarea" 
+            placeholder="Ask anything across your devices or search files..." 
+            rows="1"
+          ></textarea>
+          <button id="btnSendMessage" class="send-btn" title="Send message">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
         </div>
+        <div class="input-disclaimer">OmniNode AI cross-references real host files & Android device telemetry in real-time.</div>
       </div>
+    </main>
+  </div>
 
-      <!-- Live Chat Messages Viewport -->
-      <div class="chat-stream" id="chatStream">
-        <!-- Initial Welcome Message from OmniNode AI -->
-        <div class="chat-msg assistant">
-          <div class="chat-avatar">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
-          </div>
-          <div class="chat-bubble">
-            <p>👋 <b>Welcome to OmniNode AI.</b> I am your cross-device decision intelligence agent.</p>
-            <p>I can correlate data from your host computers and USB-connected Android phones in real time (e.g. comparing PC PDF invoices with mobile bank SMS or WhatsApp delivery notices).</p>
-            <blockquote style="margin-top: 0.5rem;">
-              💡 <b>Tip:</b> Run <code>setup.bat</code> on any PC to sync its files and connected Android phones into this intelligence mesh.
-            </blockquote>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Scenario Chips -->
-      <div style="padding: 0.5rem 1.5rem; background: rgba(15, 23, 42, 0.7); border-top: 1px solid var(--border-glass); display: flex; gap: 0.5rem; overflow-x: auto;">
-        <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center; white-space: nowrap;">Ask:</span>
-        <button class="chip" data-quick="What devices and host PCs are currently connected to my mesh network?">🖥️ List Connected Devices</button>
-        <button class="chip" data-quick="Search all connected devices for recent invoice, receipt, and payment transaction records.">💳 Check Payments & Invoices</button>
-        <button class="chip" data-quick="Find all messages and SMS alerts received on connected Android phones.">📱 Read Mobile Messages</button>
-        <button class="chip" data-quick="Summarize all documents, logs, and files indexed across all computers.">📄 Overview Synced Files</button>
-      </div>
-
-      <!-- Chat Input Bar -->
-      <div class="chat-input-bar">
-        <input type="text" id="chatInput" class="chat-input" placeholder="Ask a question or request a decision across all connected devices (e.g., 'Did we receive invoice #1024 payment confirmation?')..." autocomplete="off" />
-        <button class="btn btn-primary" id="btnSendMessage" style="padding: 0.75rem 1.25rem;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-          <span>Send</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- Live Device Mesh Section -->
-    <section>
-      <div class="section-header">
-        <div class="section-title">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-blue);"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M9 21V9"></path></svg>
-          <span>Live Connected Device Mesh</span>
-        </div>
-        <div style="font-size: 0.8rem; color: var(--text-muted);">Syncing in real-time via Supabase PostgreSQL & Agent WebSockets</div>
-      </div>
-      <div class="device-mesh-grid" id="deviceMeshContainer">
-        <!-- Dynamically rendered device cards -->
-      </div>
-    </section>
-
-    <!-- Cross-Device Asset Explorer -->
-    <section class="stat-card" style="display: flex; flex-direction: column; align-items: stretch; padding: 1.5rem;">
-      <div class="section-header">
-        <div class="section-title">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-purple);"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-          <span>Cross-Device Asset Explorer</span>
-        </div>
-        <div style="display: flex; gap: 0.5rem;">
-          <input type="text" id="assetSearchInput" class="form-input" placeholder="Search across all devices..." style="min-width: 250px;" />
-          <select id="assetCategoryFilter" class="form-input" style="cursor: pointer;">
-            <option value="all">All Categories</option>
-            <option value="message">Messages / SMS</option>
-            <option value="image">Images / OCR</option>
-            <option value="document">Documents & Code</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="overflow-x: auto;">
-        <table class="asset-explorer-table">
-          <thead>
-            <tr>
-              <th>Asset Name</th>
-              <th>Origin Device</th>
-              <th>Category</th>
-              <th>Size</th>
-              <th>Path</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="assetsTableBody">
-            <!-- Dynamically populated -->
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </main>
-
-  <!-- Agent Download & Deploy Modal -->
-  <div class="modal-overlay" id="downloadModal">
+  <!-- Account & Settings Modal -->
+  <div class="modal-backdrop" id="accountModal">
     <div class="modal-card">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="font-size: 1.15rem; font-weight: 700;">Deploy Host Agent (`setup.bat`)</h3>
-        <button class="btn btn-secondary" style="padding: 4px 8px;" id="btnCloseDownloadModal">✕</button>
+      <div class="modal-header">
+        <div class="modal-title">User Account & Settings</div>
+        <button class="icon-btn modal-close" id="btnCloseAccountModal">&times;</button>
       </div>
+      <div class="modal-body">
+        <!-- Tabs -->
+        <div class="modal-tabs">
+          <button class="modal-tab active" id="tabAuth">Account</button>
+          <button class="modal-tab" id="tabApiKeys">API Configuration</button>
+        </div>
 
-      <p style="font-size: 0.875rem; color: var(--text-secondary);">
-        Run this single script on any Windows, Mac, or Linux computer. It will automatically crawl local files, detect any connected Android phones via USB debugging, and sync all assets to this central Supabase hub.
-      </p>
+        <!-- Account Tab Content -->
+        <div class="tab-pane active" id="paneAuth">
+          <div id="authLoggedOutView">
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" id="authEmail" class="form-input" placeholder="you@example.com" />
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="authPassword" class="form-input" placeholder="••••••••" />
+            </div>
+            <div class="auth-buttons-row">
+              <button class="btn btn-primary" id="btnSignIn">Sign In</button>
+              <button class="btn btn-secondary" id="btnSignUp">Create Account</button>
+            </div>
+            <div id="authErrorMsg" class="auth-error-msg"></div>
+          </div>
 
-      <div class="form-group">
-        <label>Quick Command (Run in PowerShell / Terminal on Target PC):</label>
-        <div class="code-snippet">git clone https://github.com/your-repo/agentai.git && cd agentai/agent && setup.bat</div>
-      </div>
+          <div id="authLoggedInView" style="display: none;">
+            <div class="user-profile-card">
+              <div class="user-avatar big-avatar" id="profileAvatar">U</div>
+              <div style="font-weight: 600; font-size: 1.05rem;" id="profileEmail">user@example.com</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">Chat history is automatically saved to your cloud profile.</div>
+              <button class="btn btn-secondary" id="btnSignOut" style="margin-top: 1rem; width: 100%;">Sign Out</button>
+            </div>
+          </div>
+        </div>
 
-      <div class="form-group">
-        <label>Android USB Debugging Setup Checklist:</label>
-        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 4px;">
-          <div>1. Go to Android <b>Settings &gt; About Phone &gt; Tap "Build Number" 7 times</b> to enable Developer Options.</div>
-          <div>2. Go to <b>Developer Options &gt; Turn ON "USB Debugging"</b>.</div>
-          <div>3. Connect Phone via USB cable to the PC running <code>setup.bat</code>.</div>
-          <div>4. Tap <b>"Always allow from this computer"</b> when prompted on your phone screen.</div>
+        <!-- API Keys Tab Content -->
+        <div class="tab-pane" id="paneApiKeys">
+          <div class="form-group">
+            <label>Groq API Key (Ultra-Fast 500 tokens/s)</label>
+            <input type="password" id="inputGrokKey" class="form-input" placeholder="gsk_..." />
+          </div>
+          <div class="form-group">
+            <label>OpenRouter API Key (Free Models)</label>
+            <input type="password" id="inputOpenRouterKey" class="form-input" placeholder="sk-or-v1-..." />
+          </div>
+          <div class="form-group">
+            <label>Google Gemini API Key</label>
+            <input type="password" id="inputGeminiApiKey" class="form-input" placeholder="AQ..." />
+          </div>
+          <button class="btn btn-primary" id="btnSaveApiKeys" style="width: 100%;">Save Configuration</button>
         </div>
       </div>
+    </div>
+  </div>
 
-      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
-        <button class="btn btn-primary" id="btnDownloadBatFile">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Download setup.bat
+  <!-- Download setup.bat Modal -->
+  <div class="modal-backdrop" id="downloadModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">Sync Any PC & Android Device</div>
+        <button class="icon-btn modal-close" id="btnCloseDownloadModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1rem;">
+          Download and run <b>setup.bat</b> on any Windows laptop or desktop. It will connect to this mesh, index your drives, and link any USB Android phone with zero configuration.
+        </p>
+        <button class="btn btn-primary" id="btnDownloadBatFile" style="width: 100%;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Download setup.bat</span>
         </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Settings / Multi-Tier AI & Supabase Config Modal -->
-  <div class="modal-overlay" id="configModal">
-    <div class="modal-card" style="max-height: 90vh; overflow-y: auto;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="font-size: 1.15rem; font-weight: 700;">Multi-Tier AI & Cloud Configuration</h3>
-        <button class="btn btn-secondary" style="padding: 4px 8px;" id="btnCloseConfigModal">✕</button>
-      </div>
-
-      <div style="background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.25); border-radius: 8px; padding: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">
-        <b>⚡ Priority AI Routing:</b><br/>
-        1. OpenRouter (All Free Models) ➔ 2. Grok AI (xAI API) ➔ 3. Zero-API Free Web Models ➔ 4. Google Gemini ➔ 5. Offline Resilient Reasoner
-      </div>
-
-      <div class="form-group">
-        <label>1. OpenRouter API Key (Supports Llama 3.3 70B, DeepSeek R1, Qwen 2.5 Free)</label>
-        <input type="password" id="inputOpenRouterKey" class="form-input" placeholder="sk-or-v1-..." />
-        <span style="font-size: 0.75rem; color: var(--text-muted);">Get a free key from <a href="https://openrouter.ai" target="_blank" style="color: var(--accent-cyan);">openrouter.ai</a> to access all free models.</span>
-      </div>
-
-      <div class="form-group">
-        <label>2. Grok AI (xAI) API Key (Second Fallback Tier)</label>
-        <input type="password" id="inputGrokKey" class="form-input" placeholder="xai-..." />
-        <span style="font-size: 0.75rem; color: var(--text-muted);">Get your API key from <a href="https://console.x.ai" target="_blank" style="color: var(--accent-cyan);">console.x.ai</a>.</span>
-      </div>
-
-      <div class="form-group">
-        <label>3. Google Gemini API Key (Fourth Fallback Tier)</label>
-        <input type="password" id="inputGeminiApiKey" class="form-input" placeholder="AIzaSy..." />
-        <span style="font-size: 0.75rem; color: var(--text-muted);">Get free key from <a href="https://aistudio.google.com" target="_blank" style="color: var(--accent-cyan);">aistudio.google.com</a>.</span>
-      </div>
-
-      <hr style="border: 0; border-top: 1px solid var(--border-glass);" />
-
-      <div class="form-group">
-        <label>Supabase Project URL</label>
-        <input type="text" id="inputSupabaseUrl" class="form-input" placeholder="https://your-project.supabase.co" />
-      </div>
-
-      <div class="form-group">
-        <label>Supabase Anon Public API Key</label>
-        <input type="password" id="inputSupabaseKey" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpX..." />
-      </div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem;">
-        <button class="btn btn-secondary" id="btnCancelConfig">Cancel</button>
-        <button class="btn btn-primary" id="btnSaveConfig">Save Configuration</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Asset Content Viewer Modal -->
-  <div class="modal-overlay" id="assetViewerModal">
-    <div class="modal-card" style="max-width: 750px;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 id="viewerTitle" style="font-size: 1.1rem; font-weight: 700;">Asset Details</h3>
-        <button class="btn btn-secondary" style="padding: 4px 8px;" id="btnCloseAssetViewer">✕</button>
-      </div>
-      <div id="viewerOriginBadge"></div>
-      <div class="form-group">
-        <label>Extracted Content / OCR / Message:</label>
-        <div id="viewerContent" class="code-snippet" style="max-height: 250px; overflow-y: auto;"></div>
-      </div>
-      <div class="form-group">
-        <label>Metadata & Properties:</label>
-        <div id="viewerMetadata" class="code-snippet" style="max-height: 120px; overflow-y: auto;"></div>
       </div>
     </div>
   </div>

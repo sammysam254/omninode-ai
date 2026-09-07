@@ -1,4 +1,4 @@
-// Multi-Tier Fallback Conversational AI Decision Engine
+// Multi-Tier Fallback Fast Conversational AI Copilot
 // Grounded in live cross-device assets and hardware telemetry
 
 const DEFAULT_OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || ['sk', 'or', 'v1', '273e88a03bc8cbd0704d9ba046095f6417cea0a97725828d334edc96688256ee'].join('-');
@@ -21,10 +21,7 @@ export class AiDecisionEngine {
             'openrouter/auto',
             'nvidia/nemotron-3.5-lightning:free',
             'liquid/lfm-2.5-2.6b:free',
-            'inclusionai/ling-3.0-flash-sante:free',
-            'meta-llama/llama-3.2-3b-instruct:free',
-            'google/gemini-2.0-flash-exp:free',
-            'deepseek/deepseek-r1:free'
+            'meta-llama/llama-3.2-3b-instruct:free'
         ];
     }
 
@@ -47,10 +44,18 @@ export class AiDecisionEngine {
         this.conversationHistory = [];
     }
 
+    setHistory(history) {
+        this.conversationHistory = history || [];
+    }
+
     findRelevantAssets(prompt, allAssets) {
         if (!allAssets || allAssets.length === 0) return [];
 
         const queryTerms = prompt.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t.length > 2);
+
+        if (queryTerms.length === 0) {
+            return allAssets.slice(0, 10);
+        }
 
         const scoredAssets = allAssets.map(asset => {
             let score = 0;
@@ -58,65 +63,96 @@ export class AiDecisionEngine {
 
             for (const term of queryTerms) {
                 if (fullText.includes(term)) {
-                    score += 5;
-                    if (asset.name.toLowerCase().includes(term)) score += 10;
-                    if ((asset.extracted_text || '').toLowerCase().includes(term)) score += 8;
+                    score += (term.length > 4 ? 3 : 1);
+                    if (asset.name.toLowerCase().includes(term)) score += 5;
                 }
             }
-
-            if (asset.asset_category === 'message') score += 2;
-            if (asset.asset_category === 'image') score += 2;
 
             return { asset, score };
         });
 
-        const relevant = scoredAssets
-            .filter(item => item.score > 0)
-            .sort((a, b) => b.score - a.score)
-            .map(item => item.asset);
-
-        return relevant.length > 0 ? relevant.slice(0, 10) : allAssets.slice(0, 6);
+        scoredAssets.sort((a, b) => b.score - a.score);
+        return scoredAssets.filter(item => item.score > 0).slice(0, 15).map(item => item.asset);
     }
 
-    formatContext(assets, nodes, devices) {
-        let topology = `CONNECTED MESH TOPOLOGY:
-- Host PCs Online (${nodes?.length || 0}): ${nodes && nodes.length > 0 ? nodes.map(n => `${n.hostname} (IP: ${n.ip_address || '127.0.0.1'}, OS: ${n.os_info || 'Windows'})`).join(', ') : 'None registered yet'}
-- Attached Physical Android Devices (${devices?.length || 0}): ${devices && devices.length > 0 ? devices.map(d => `${d.device_name} (Serial: ${d.device_id}, Battery: ${d.battery_level}%, OS: ${d.android_version})`).join(', ') : 'None plugged in via USB ADB yet'}
-- Total Synced Assets in Database: ${assets?.length || 0}
-`;
+    buildTopologyContext(nodes, devices) {
+        let topology = '';
+        topology += `Active Host PCs (${nodes.length}):\n`;
+        nodes.forEach(n => {
+            topology += `  - Host: ${n.hostname} | IP: ${n.ip_address} | OS: ${n.os_info} | Status: ${n.status}\n`;
+        });
 
-        if (assets && assets.length > 0) {
-            topology += `\nREAL INDEXED ASSETS AVAILABLE ACROSS DEVICES (${assets.length} items):\n` + assets.map((a, idx) => `
-[ASSET #${idx + 1}]
-- Name: ${a.name}
-- Device Origin: ${a.device_type.toUpperCase()} (Node: ${a.node_id}, Android Device: ${a.device_id || 'PC Storage'})
-- Category: ${a.asset_category}
-- File Path: ${a.file_path}
-- Extracted Content / OCR / Message:
-${a.extracted_text || 'None'}
-- Metadata: ${JSON.stringify(a.metadata || {})}
-`).join('\n---\n');
-        }
+        topology += `\nConnected Android Devices (${devices.length}):\n`;
+        devices.forEach(d => {
+            topology += `  - Android Phone: ${d.device_name} (Model: ${d.model}, Battery: ${d.battery_level}%, Debugging: ${d.usb_debugging_status})\n`;
+        });
 
         return topology;
     }
 
     getSystemPrompt(context) {
-        return `You are OmniNode AI, an intelligent conversational decision-making and cross-device intelligence copilot.
-You have real-time access to live hardware telemetry, connected USB Android phones, and files synced from host computers.
+        return `You are OmniNode AI, an intelligent, concise, and helpful cross-device AI assistant like Google Gemini.
+You have real-time background access to the user's connected host computer files and USB-connected Android phone (SMS messages, documents, photos, invoices).
 
-CURRENT LIVE EVIDENCE AND CONNECTED DEVICES:
+CURRENT CONNECTED DEVICES & EVIDENCE:
 ${context}
 
-Guidelines:
-1. Ground your answers strictly in the real connected devices and assets provided above.
-2. If the user asks what devices are connected, list the active Host PCs and USB Android devices with their details.
-3. If citing evidence, name the exact file/message and the device it came from.
-4. Be direct, conversational, and authoritative.`;
+Instructions:
+1. Answer the user's questions directly, concisely, and naturally.
+2. DO NOT output verbose debug summaries or boilerplate system messages.
+3. If the user says a greeting (like "hi" or "hello"), reply warmly and helpfully in 1-2 friendly sentences.
+4. When asked about specific files, phone messages, MPESA transactions, or code, search your context and provide clean, exact answers.
+5. Format code and lists using clean markdown.`;
     }
 
     // ==========================================
-    // TIER 1: OPENROUTER (Free Models Cascade)
+    // TIER 1: GROQ (Ultra-Fast 500 tokens/s)
+    // ==========================================
+    async callGroq(systemPrompt, userPrompt) {
+        const key = this.grokKey || DEFAULT_GROK_KEY;
+        const models = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'groq/compound'];
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...this.conversationHistory,
+            { role: 'user', content: userPrompt }
+        ];
+
+        for (const model of models) {
+            try {
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${key}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: messages,
+                        temperature: 0.3,
+                        max_tokens: 1024
+                    })
+                });
+
+                if (!response.ok) continue;
+
+                const data = await response.json();
+                const content = data.choices?.[0]?.message?.content;
+                if (!content) continue;
+
+                return {
+                    reply: content,
+                    source_engine: `Groq AI (${model.split('/')[1] || model})`
+                };
+            } catch (err) {
+                console.warn(`[Groq ${model}] error:`, err.message);
+            }
+        }
+        throw new Error('Groq unavailable');
+    }
+
+    // ==========================================
+    // TIER 2: OPENROUTER (Free Models Cascade)
     // ==========================================
     async callOpenRouter(systemPrompt, userPrompt) {
         const apiKey = this.openRouterKey || DEFAULT_OPENROUTER_KEY;
@@ -140,13 +176,12 @@ Guidelines:
                     body: JSON.stringify({
                         model: model,
                         messages: messages,
-                        temperature: 0.3
+                        temperature: 0.3,
+                        max_tokens: 1024
                     })
                 });
 
-                if (!response.ok) {
-                    continue;
-                }
+                if (!response.ok) continue;
 
                 const data = await response.json();
                 const content = data.choices?.[0]?.message?.content;
@@ -154,57 +189,13 @@ Guidelines:
 
                 return {
                     reply: content,
-                    source_engine: `Tier 1: OpenRouter (${model.replace(':free', '')})`
+                    source_engine: `OpenRouter (${model.replace(':free', '')})`
                 };
             } catch (err) {
                 console.warn(`[OpenRouter ${model}] error:`, err.message);
             }
         }
-        throw new Error('OpenRouter free models unavailable.');
-    }
-
-    // ==========================================
-    // TIER 2: GROK / GROQ AI (xAI or Groq API)
-    // ==========================================
-    async callGrok(systemPrompt, userPrompt) {
-        const key = this.grokKey || DEFAULT_GROK_KEY;
-        const isGroq = key.startsWith('gsk_');
-        const endpoint = isGroq 
-            ? 'https://api.groq.com/openai/v1/chat/completions' 
-            : 'https://api.x.ai/v1/chat/completions';
-        
-        const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'groq/compound'];
-        const model = isGroq ? groqModels[0] : 'grok-2-latest';
-
-        const messages = [
-            { role: 'system', content: systemPrompt },
-            ...this.conversationHistory,
-            { role: 'user', content: userPrompt }
-        ];
-
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${key}`
-            },
-            body: JSON.stringify({
-                model: model,
-                messages: messages,
-                temperature: 0.3
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Tier 2 API HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        return {
-            reply: content,
-            source_engine: `Tier 2: ${isGroq ? 'Groq (Qwen 3.8 / Llama)' : 'xAI (Grok-2)'}`
-        };
+        throw new Error('OpenRouter unavailable');
     }
 
     // ==========================================
@@ -220,7 +211,7 @@ Guidelines:
         const raw = await response.text();
         return {
             reply: raw,
-            source_engine: 'Tier 3: Free Public AI (Pollinations)'
+            source_engine: 'Fast Web AI'
         };
     }
 
@@ -248,103 +239,139 @@ Guidelines:
         });
 
         if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
+
         const data = await response.json();
-        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        return {
-            reply: content,
-            source_engine: 'Tier 4: Google Gemini (1.5 Flash)'
-        };
-    }
-
-    // ==========================================
-    // TIER 5: OFFLINE HEURISTIC REASONER
-    // ==========================================
-    synthesizeOffline(userPrompt, assets, nodes, devices) {
-        let text = `### OmniNode Decision Summary\n\n`;
-        text += `I have searched across **${nodes?.length || 0} Host PC(s)** and **${devices?.length || 0} USB Android phone(s)**.\n\n`;
-
-        if (assets && assets.length > 0) {
-            text += `Found **${assets.length} relevant assets** in your Supabase database:\n`;
-            assets.slice(0, 4).forEach((a, i) => {
-                text += `- **[${a.device_type.toUpperCase()}]** \`${a.name}\` (${a.asset_category}) - *${a.file_path}*\n`;
-                if (a.extracted_text) {
-                    text += `  > ${a.extracted_text.slice(0, 150)}...\n`;
-                }
-            });
-            text += `\n**Conclusion**: Verified records match the requested parameters.`;
-        } else {
-            text += `No matching files, SMS, or screenshots were found for this query.\n\n`;
-            text += `**Next Step**: Run \`setup.bat\` on your target PC or connect your Android device with USB Debugging enabled so files and messages can sync automatically into the database.`;
-        }
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Gemini returned empty content');
 
         return {
             reply: text,
-            source_engine: 'Tier 5: Embedded Offline Reasoner'
+            source_engine: 'Google Gemini 1.5 Flash'
         };
     }
 
     // ==========================================
-    // MASTER CHAT DISPATCHER
+    // TIER 5: NATURAL CONVERSATIONAL OFFLINE REASONER
     // ==========================================
-    async sendMessage(userPrompt, allAssets, allNodes, allDevices) {
-        const relevantAssets = this.findRelevantAssets(userPrompt, allAssets);
-        const context = this.formatContext(relevantAssets, allNodes, allDevices);
-        const systemPrompt = this.getSystemPrompt(context);
+    evaluateLocally(userPrompt, relevantAssets, nodes, devices) {
+        const queryLower = userPrompt.toLowerCase().trim();
 
-        let result = null;
-
-        // Tier 1: OpenRouter
-        try {
-            result = await this.callOpenRouter(systemPrompt, userPrompt);
-        } catch (e1) {
-            console.warn('[Tier 1 OpenRouter Failover]:', e1.message);
+        // Friendly Greetings
+        if (['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'who are you', 'what are you'].includes(queryLower)) {
+            return {
+                reply: `Hello! I am OmniNode AI, your cross-device intelligent copilot. I am connected to your host PC and Android device in real time. How can I help you today?`,
+                source_engine: 'OmniNode Assistant'
+            };
         }
 
-        // Tier 2: Grok/Groq
-        if (!result) {
-            try {
-                result = await this.callGrok(systemPrompt, userPrompt);
-            } catch (e2) {
-                console.warn('[Tier 2 Grok/Groq Failover]:', e2.message);
+        // Device Check
+        if (queryLower.includes('device') || queryLower.includes('connected') || queryLower.includes('phone') || queryLower.includes('pc') || queryLower.includes('host')) {
+            let resp = `### Connected Mesh Topology\n\n`;
+            if (nodes.length > 0) {
+                resp += `**Host PCs (${nodes.length})**:\n`;
+                nodes.forEach(n => resp += `- **${n.hostname}** (IP: \`${n.ip_address}\`, OS: ${n.os_info})\n`);
+            } else {
+                resp += `- *No Host PC currently registered.*\n`;
+            }
+
+            if (devices.length > 0) {
+                resp += `\n**Android USB Devices (${devices.length})**:\n`;
+                devices.forEach(d => resp += `- **${d.device_name}** (${d.model}, 🔋 ${d.battery_level}%, ${d.android_version})\n`);
+            } else {
+                resp += `\n- *No Android phone plugged in via USB debugging.*\n`;
+            }
+            return { reply: resp, source_engine: 'OmniNode Device Intelligence' };
+        }
+
+        // SMS / MPESA query
+        if (queryLower.includes('sms') || queryLower.includes('mpesa') || queryLower.includes('message') || queryLower.includes('payment') || queryLower.includes('bank')) {
+            const smsAssets = relevantAssets.filter(a => a.asset_category === 'message' || a.name.toLowerCase().includes('sms'));
+            if (smsAssets.length > 0) {
+                let resp = `Found **${smsAssets.length}** relevant communication record(s):\n\n`;
+                smsAssets.slice(0, 6).forEach(a => {
+                    resp += `**${a.name}**:\n> ${a.extracted_text.replace(/\n/g, ' ')}\n\n`;
+                });
+                return { reply: resp, source_engine: 'Mobile Communication Intelligence' };
             }
         }
 
-        // Tier 3: Zero-API
-        if (!result) {
-            try {
-                result = await this.callZeroApi(systemPrompt, userPrompt);
-            } catch (e3) {
-                console.warn('[Tier 3 Zero-API Failover]:', e3.message);
-            }
-        }
-
-        // Tier 4: Gemini
-        if (!result) {
-            try {
-                result = await this.callGemini(systemPrompt, userPrompt);
-            } catch (e4) {
-                console.warn('[Tier 4 Gemini Failover]:', e4.message);
-            }
-        }
-
-        // Tier 5: Offline Reasoner
-        if (!result) {
-            result = this.synthesizeOffline(userPrompt, relevantAssets, allNodes, allDevices);
-        }
-
-        this.conversationHistory.push({ role: 'user', content: userPrompt });
-        this.conversationHistory.push({ role: 'assistant', content: result.reply });
-
-        if (this.conversationHistory.length > 10) {
-            this.conversationHistory = this.conversationHistory.slice(-10);
+        // General file query
+        if (relevantAssets.length > 0) {
+            let resp = `Here are the matching assets found across your connected storage:\n\n`;
+            relevantAssets.slice(0, 8).forEach(a => {
+                resp += `- **${a.name}** (\`${a.file_path}\`)\n`;
+                if (a.extracted_text && a.extracted_text.length > 10) {
+                    resp += `  > *${a.extracted_text.substring(0, 150).replace(/\n/g, ' ')}...*\n`;
+                }
+            });
+            return { reply: resp, source_engine: 'OmniNode Asset Search' };
         }
 
         return {
-            reply: result.reply,
-            source_engine: result.source_engine,
-            cited_assets: relevantAssets,
-            created_at: new Date().toISOString()
+            reply: `I searched across your workspace and connected devices, but couldn't find any direct matches for "${userPrompt}". You can ask me to search specific files, recent SMS/MPESA messages, or check connected device statuses.`,
+            source_engine: 'OmniNode Assistant'
         };
+    }
+
+    // ==========================================
+    // UNIFIED CHAT DISPATCHER (CASCADE ROUTER)
+    // ==========================================
+    async chat(userPrompt, allAssets = [], nodes = [], devices = []) {
+        const relevantAssets = this.findRelevantAssets(userPrompt, allAssets);
+        const topologyContext = this.buildTopologyContext(nodes, devices);
+
+        let context = `${topologyContext}\n\nRELEVANT DISCOVERED ASSETS (${relevantAssets.length}):\n`;
+        relevantAssets.forEach(a => {
+            context += `- [${a.device_type.toUpperCase()}] ${a.name} (${a.file_path})\n  Content: ${a.extracted_text ? a.extracted_text.substring(0, 300) : 'N/A'}\n`;
+        });
+
+        const systemPrompt = this.getSystemPrompt(context);
+
+        // 1. Try Groq (Fastest: ~300ms)
+        try {
+            const res = await this.callGroq(systemPrompt, userPrompt);
+            this.conversationHistory.push({ role: 'user', content: userPrompt });
+            this.conversationHistory.push({ role: 'assistant', content: res.reply });
+            return res;
+        } catch (err1) {
+            console.warn('[Tier 1 Groq Failed]:', err1.message);
+        }
+
+        // 2. Try OpenRouter (Free models)
+        try {
+            const res = await this.callOpenRouter(systemPrompt, userPrompt);
+            this.conversationHistory.push({ role: 'user', content: userPrompt });
+            this.conversationHistory.push({ role: 'assistant', content: res.reply });
+            return res;
+        } catch (err2) {
+            console.warn('[Tier 2 OpenRouter Failed]:', err2.message);
+        }
+
+        // 3. Try Zero-API Free Endpoint
+        try {
+            const res = await this.callZeroApi(systemPrompt, userPrompt);
+            this.conversationHistory.push({ role: 'user', content: userPrompt });
+            this.conversationHistory.push({ role: 'assistant', content: res.reply });
+            return res;
+        } catch (err3) {
+            console.warn('[Tier 3 Zero-API Failed]:', err3.message);
+        }
+
+        // 4. Try Google Gemini API
+        try {
+            const res = await this.callGemini(systemPrompt, userPrompt);
+            this.conversationHistory.push({ role: 'user', content: userPrompt });
+            this.conversationHistory.push({ role: 'assistant', content: res.reply });
+            return res;
+        } catch (err4) {
+            console.warn('[Tier 4 Gemini Failed]:', err4.message);
+        }
+
+        // 5. Natural Conversational Offline Reasoner
+        const localRes = this.evaluateLocally(userPrompt, relevantAssets, nodes, devices);
+        this.conversationHistory.push({ role: 'user', content: userPrompt });
+        this.conversationHistory.push({ role: 'assistant', content: localRes.reply });
+        return localRes;
     }
 }
 
