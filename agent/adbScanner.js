@@ -28,7 +28,7 @@ class AdbScanner {
         return 'adb';
     }
 
-    execCommand(cmd, timeoutMs = 20000) {
+    execCommand(cmd, timeoutMs = 6000) {
         return new Promise((resolve) => {
             exec(`"${this.adbPath}" ${cmd}`, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
                 if (error) {
