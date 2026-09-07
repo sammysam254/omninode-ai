@@ -1,5 +1,13 @@
+@echo off
+setlocal enabledelayedexpansion
+
+:: Anchor to current directory
+cd /d "%~dp0"
+
+title OmniNode AI - Universal PC and Android ADB Sync Agent
+
 echo =====================================================================
-echo          OmniNode AI - Universal PC & Android ADB Sync Agent        
+echo          OmniNode AI - Universal PC and Android ADB Sync Agent        
 echo =====================================================================
 echo.
 
@@ -19,7 +27,7 @@ if %ERRORLEVEL% EQU 0 (
 where node >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Node.js is not installed on this system.
-    echo Please install Node.js (v18+) from https://nodejs.org or run:
+    echo Please install Node.js from https://nodejs.org or run:
     echo     winget install OpenJS.NodeJS.LTS
     echo.
     pause
@@ -43,7 +51,10 @@ if not exist "node_modules" (
 
 :: 4. Check for .env or configuration
 if not exist ".env" (
-    if exist ".env.example" (
+    if exist "..\.env" (
+        copy ..\.env .env >nul
+        echo [*] Copied .env configuration.
+    ) else if exist ".env.example" (
         copy .env.example .env >nul
         echo [*] Created .env configuration from template.
     )
@@ -52,10 +63,9 @@ if not exist ".env" (
 :: 5. Check ADB (Android Debug Bridge)
 where adb >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo [OK] Android Debug Bridge (ADB) detected.
+    echo [OK] Android Debug Bridge ADB detected.
 ) else (
     echo [!] ADB not found in system PATH.
-    echo [!] Physical Android USB sync will use local SDK or fallback simulator.
 )
 
 echo.
@@ -67,4 +77,6 @@ echo.
 
 node agent.js
 
+echo.
+echo [!] OmniNode Agent stopped.
 pause

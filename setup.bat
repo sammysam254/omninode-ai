@@ -1,16 +1,19 @@
 @echo off
 setlocal enabledelayedexpansion
 
-title OmniNode AI - Universal Launcher & Installer
+:: Anchor to current directory
+cd /d "%~dp0"
+
+title OmniNode AI - Universal Launcher and Installer
 
 echo =====================================================================
-echo          OmniNode AI - Universal All-in-One Setup & Launcher        
+echo          OmniNode AI - Universal All-in-One Setup and Launcher        
 echo =====================================================================
 echo.
 
 set "REPO_URL=https://github.com/sammysam254/omninode-ai.git"
 
-:: 1. Check Git & Bootstrap Repository if needed
+:: 1. Check Git and Bootstrap Repository if needed
 where git >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     if not exist "web" (
@@ -28,7 +31,7 @@ if %ERRORLEVEL% EQU 0 (
         echo [OK] Codebase is up to date.
     )
 ) else (
-    echo [!] Git not found. Proceeding with existing local files.
+    echo [!] Git not found in system PATH. Proceeding with local files.
 )
 
 :: 2. Check Node.js
@@ -39,11 +42,11 @@ if %ERRORLEVEL% NEQ 0 (
     winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
     if %ERRORLEVEL% NEQ 0 (
         echo [ERROR] Automated Node.js installation failed.
-        echo Please download and install Node.js (v18+) from: https://nodejs.org
+        echo Please download and install Node.js from https://nodejs.org
         pause
         exit /b 1
     )
-    echo [OK] Node.js installed. Please restart this script if prompted.
+    echo [OK] Node.js installed.
 )
 
 echo [OK] Node.js detected:
@@ -53,7 +56,7 @@ node --version
 echo.
 echo [*] Checking Agent dependencies...
 if not exist "agent\node_modules" (
-    echo [*] Installing Agent dependencies in agent\...
+    echo [*] Installing Agent dependencies in agent folder...
     pushd agent
     call npm install --no-audit --no-fund
     popd
@@ -62,7 +65,7 @@ if not exist "agent\node_modules" (
 :: 4. Setup Web Dashboard Dependencies
 echo [*] Checking Web Dashboard dependencies...
 if not exist "web\node_modules" (
-    echo [*] Installing Web dependencies in web\...
+    echo [*] Installing Web dependencies in web folder...
     pushd web
     call npm install --no-audit --no-fund
     popd
@@ -89,27 +92,29 @@ if not exist "web\.env" (
 echo.
 where adb >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo [OK] Android Debug Bridge (ADB) detected.
+    echo [OK] Android Debug Bridge ADB detected.
 ) else (
-    echo [!] ADB not in system PATH (Physical USB sync will use local SDK or simulator).
+    echo [!] ADB not in system PATH.
 )
 
 echo.
 echo =====================================================================
-echo   [1/2] Launching Web Dashboard (Vite on http://localhost:5173)...
-echo   [2/2] Starting Universal PC & Android ADB Sync Agent...
+echo   [1/2] Launching Web Dashboard on http://localhost:5173...
+echo   [2/2] Starting Universal PC and Android ADB Sync Agent...
 echo =====================================================================
 echo.
 
 :: Launch Web Server in a separate background window
-start "OmniNode AI - Web Dashboard Server" cmd /c "cd web && npm run dev"
+start "OmniNode AI - Web Dashboard Server" cmd /c "cd /d ""%~dp0web"" && npm run dev"
 
-:: Wait 3 seconds for web server to boot and launch browser
+:: Wait 3 seconds for web server to initialize then open default browser
 timeout /t 3 /nobreak >nul
 start http://localhost:5173
 
 :: Launch Agent in the main window
-cd agent
+cd /d "%~dp0agent"
 node agent.js
 
+echo.
+echo [!] OmniNode Agent stopped.
 pause
