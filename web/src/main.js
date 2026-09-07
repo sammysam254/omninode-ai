@@ -318,8 +318,45 @@ function setupEvents() {
     btnDownloadBatFile.addEventListener('click', () => {
         const batContent = `@echo off
 setlocal enabledelayedexpansion
-title OmniNode AI Agent
-echo Starting OmniNode Agent...
+title OmniNode AI - Universal Launcher
+echo =====================================================================
+echo          OmniNode AI - Universal Setup & Launcher
+echo =====================================================================
+set "REPO_URL=https://github.com/sammysam254/omninode-ai.git"
+
+where git >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    if not exist "web" (
+        echo [*] Fresh install: Cloning OmniNode AI from GitHub...
+        git clone %REPO_URL% temp_clone
+        if exist "temp_clone" (
+            xcopy /E /Y /Q temp_clone\\* . >nul
+            rmdir /S /Q temp_clone
+        )
+    ) else if exist ".git" (
+        echo [*] Pulling latest updates from GitHub...
+        git pull origin main --quiet 2>nul
+    )
+)
+
+where node >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo [*] Installing Node.js LTS via winget...
+    winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
+)
+
+if not exist "agent\\node_modules" (
+    pushd agent & call npm install --no-audit --no-fund & popd
+)
+if not exist "web\\node_modules" (
+    pushd web & call npm install --no-audit --no-fund & popd
+)
+
+start "OmniNode AI Dashboard" cmd /c "cd web && npm run dev"
+timeout /t 3 /nobreak >nul
+start http://localhost:5173
+
+cd agent
 node agent.js
 pause`;
         const blob = new Blob([batContent], { type: 'text/plain' });
