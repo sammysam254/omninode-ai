@@ -10,10 +10,13 @@ class AdbScanner {
 
     detectAdb() {
         const standardPaths = [
+            path.join(__dirname, 'bin', 'adb.exe'),
+            'C:\\agentai\\agent\\bin\\adb.exe',
+            path.join(process.env.USERPROFILE || '', 'Downloads', 'adb.exe'),
+            path.join(process.env.USERPROFILE || '', 'Downloads', 'bin', 'adb.exe'),
             'adb',
             path.join(process.env.LOCALAPPDATA || '', 'Android', 'Sdk', 'platform-tools', 'adb.exe'),
             path.join(process.env.PROGRAMFILES || '', 'Android', 'platform-tools', 'adb.exe'),
-            path.join(process.env.PROGRAMFILES || '', 'platform-tools', 'adb.exe'),
             'C:\\platform-tools\\adb.exe'
         ];
 
@@ -52,7 +55,7 @@ class AdbScanner {
                 const state = parts[1];
 
                 if (state === 'device') {
-                    let model = 'Android Device';
+                    let model = 'Samsung Device';
                     const modelMatch = line.match(/model:([^\s]+)/);
                     if (modelMatch) model = modelMatch[1].replace(/_/g, ' ');
 
@@ -101,7 +104,7 @@ class AdbScanner {
         const androidVersion = resVersion.success ? `Android ${resVersion.stdout}` : 'Android';
 
         const resModel = await this.execCommand(`-s ${serial} shell getprop ro.product.model`);
-        const modelName = resModel.success ? resModel.stdout : 'Android Device';
+        const modelName = resModel.success ? resModel.stdout : 'Samsung Galaxy';
 
         return {
             battery_level: batteryLevel,

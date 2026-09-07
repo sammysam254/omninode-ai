@@ -14,12 +14,13 @@ export class AiDecisionEngine {
         this.conversationHistory = [];
 
         this.openRouterFreeModels = [
-            'meta-llama/llama-3.3-70b-instruct:free',
-            'google/gemini-2.0-flash-exp:free',
-            'deepseek/deepseek-r1:free',
-            'qwen/qwen-2.5-coder-32b-instruct:free',
+            'openrouter/auto',
+            'nvidia/nemotron-3.5-lightning:free',
+            'liquid/lfm-2.5-2.6b:free',
+            'inclusionai/ling-3.0-flash-sante:free',
             'meta-llama/llama-3.2-3b-instruct:free',
-            'mistralai/mistral-7b-instruct:free'
+            'google/gemini-2.0-flash-exp:free',
+            'deepseek/deepseek-r1:free'
         ];
     }
 
@@ -74,50 +75,47 @@ export class AiDecisionEngine {
     }
 
     formatContext(assets, nodes, devices) {
-        if (!assets || assets.length === 0) {
-            return `CONNECTED MESH TOPOLOGY:
-- Host PCs Online: ${nodes?.length || 0}
-- Attached USB Android Devices: ${devices?.length || 0}
-- Total Indexed Assets in Database: 0
-(Note: No files or messages have been synced yet. Instruct user to run setup.bat on host PCs or connect USB debugging devices.)`;
-        }
+        let topology = `CONNECTED MESH TOPOLOGY:
+- Host PCs Online (${nodes?.length || 0}): ${nodes && nodes.length > 0 ? nodes.map(n => `${n.hostname} (IP: ${n.ip_address || '127.0.0.1'}, OS: ${n.os_info || 'Windows'})`).join(', ') : 'None registered yet'}
+- Attached Physical Android Devices (${devices?.length || 0}): ${devices && devices.length > 0 ? devices.map(d => `${d.device_name} (Serial: ${d.device_id}, Battery: ${d.battery_level}%, OS: ${d.android_version})`).join(', ') : 'None plugged in via USB ADB yet'}
+- Total Synced Assets in Database: ${assets?.length || 0}
+`;
 
-        return `CONNECTED MESH TOPOLOGY:
-- Host PCs Online: ${nodes.map(n => `${n.hostname} (${n.ip_address || '127.0.0.1'})`).join(', ')}
-- Attached USB Android Devices: ${devices.map(d => `${d.device_name} (Battery: ${d.battery_level}%)`).join(', ')}
-
-REAL INDEXED ASSETS AVAILABLE ACROSS DEVICES (${assets.length} items):
-` + assets.map((a, idx) => `
+        if (assets && assets.length > 0) {
+            topology += `\nREAL INDEXED ASSETS AVAILABLE ACROSS DEVICES (${assets.length} items):\n` + assets.map((a, idx) => `
 [ASSET #${idx + 1}]
 - Name: ${a.name}
 - Device Origin: ${a.device_type.toUpperCase()} (Node: ${a.node_id}, Android Device: ${a.device_id || 'PC Storage'})
 - Category: ${a.asset_category}
 - File Path: ${a.file_path}
-- Extracted Text / Message Body / OCR Content:
+- Extracted Content / OCR / Message:
 ${a.extracted_text || 'None'}
 - Metadata: ${JSON.stringify(a.metadata || {})}
 `).join('\n---\n');
+        }
+
+        return topology;
     }
 
     getSystemPrompt(context) {
         return `You are OmniNode AI, an intelligent conversational decision-making and cross-device intelligence copilot.
-You have real-time access to files, SMS messages, WhatsApp chats, screenshots, photos, and system logs synced from distributed host computers and USB-connected Android phones.
+You have real-time access to live hardware telemetry, connected USB Android phones, and files synced from host computers.
 
-CURRENT LIVE EVIDENCE CONTEXT:
+CURRENT LIVE EVIDENCE AND CONNECTED DEVICES:
 ${context}
 
 Guidelines:
-1. Ground your answers strictly in the real assets and device data provided above.
-2. If citing evidence, name the exact file/message and the device it came from (e.g. [📱 Samsung S24 - SMS] or [🖥️ Workstation - invoice.txt]).
-3. Be direct, authoritative, and helpful. If no relevant assets are found, clearly state that and guide the user on which device needs to be scanned or which folder to place files in.
-4. If appropriate, recommend clear next actions.`;
+1. Ground your answers strictly in the real connected devices and assets provided above.
+2. If the user asks what devices are connected, list the active Host PCs and USB Android devices with their details.
+3. If citing evidence, name the exact file/message and the device it came from.
+4. Be direct, conversational, and authoritative.`;
     }
 
     // ==========================================
     // TIER 1: OPENROUTER (Free Models Cascade)
     // ==========================================
     async callOpenRouter(systemPrompt, userPrompt) {
-        const apiKey = this.openRouterKey;
+        const apiKey = this.openRouterKey || import.meta.env.VITE_OPENROUTER_API_KEY || '';
 
         const messages = [
             { role: 'system', content: systemPrompt },
@@ -132,7 +130,7 @@ Guidelines:
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey || 'free-tier'}`,
+                        'Authorization': `Bearer ${apiKey}`,
                         'HTTP-Referer': 'https://omninode.ai',
                         'X-Title': 'OmniNode AI Decision Studio'
                     },
@@ -153,7 +151,7 @@ Guidelines:
 
                 return {
                     reply: content,
-                    source_engine: `Tier 1: OpenRouter (${model})`
+                    source_engine: `Tier 1: OpenRouter (${model.replace(':free', '')})`
                 };
             } catch (err) {
                 console.warn(`[OpenRouter ${model}] error:`, err.message);
@@ -166,13 +164,15 @@ Guidelines:
     // TIER 2: GROK / GROQ AI (xAI or Groq API)
     // ==========================================
     async callGrok(systemPrompt, userPrompt) {
-        if (!this.grokKey) throw new Error('Grok key not set.');
-
-        const isGroq = this.grokKey.startsWith('gsk_');
+        const key = this.grokKey || import.meta.env.VITE_GROK_API_KEY || '';
+        const isGroq = key.startsWith('gsk_');
         const endpoint = isGroq 
             ? 'https://api.groq.com/openai/v1/chat/completions' 
             : 'https://api.x.ai/v1/chat/completions';
-        const model = isGroq ? 'llama-3.3-70b-versatile' : 'grok-2-latest';
+        
+        // Groq working models: qwen/qwen3.8-27b, openai/gpt-oss-120b, groq/compound
+        const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'groq/compound'];
+        const model = isGroq ? groqModels[0] : 'grok-2-latest';
 
         const messages = [
             { role: 'system', content: systemPrompt },
@@ -184,7 +184,7 @@ Guidelines:
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.grokKey}`
+                'Authorization': `Bearer ${key}`
             },
             body: JSON.stringify({
                 model: model,
@@ -201,7 +201,7 @@ Guidelines:
         const content = data.choices?.[0]?.message?.content;
         return {
             reply: content,
-            source_engine: `Tier 2: ${isGroq ? 'Groq (Llama 3.3 70B Turbo)' : 'xAI (Grok-2)'}`
+            source_engine: `Tier 2: ${isGroq ? 'Groq (Qwen 3.8 / Llama)' : 'xAI (Grok-2)'}`
         };
     }
 

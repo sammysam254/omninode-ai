@@ -287,11 +287,17 @@ async function startAgent() {
     console.log(`   Host: ${os.hostname()} | Node ID: ${config.nodeId}`);
     console.log(`=======================================================`);
 
+    // 1. Send Node Heartbeat
     await syncNodeHeartbeat();
-    startLocalFileWatcher();
+
+    // 2. Scan and Connect Physical Android USB ADB Devices IMMEDIATELY
+    console.log(`\x1b[34m[Android ADB]\x1b[0m Scanning for USB debugging connected devices...`);
     await syncAndroidDevices();
 
-    // Periodic Heartbeat and ADB scan
+    // 3. Start Background Local File Watcher
+    startLocalFileWatcher();
+
+    // 4. Periodic Heartbeat and ADB scan every interval
     setInterval(async () => {
         await syncNodeHeartbeat();
         await syncAndroidDevices();
