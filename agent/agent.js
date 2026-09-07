@@ -224,22 +224,19 @@ function startLocalFileWatcher() {
         });
 }
 
-// Android ADB Sync Routine
+// Android ADB Sync Routine (100% Real Physical Devices)
 async function syncAndroidDevices() {
-    console.log(`\x1b[34m[Android ADB]\x1b[0m Scanning for USB debugging connected devices...`);
     const physicalDevices = await adbScanner.getConnectedDevices();
 
-    let devicesToProcess = [...physicalDevices];
-
-    if (devicesToProcess.length === 0 && config.enableMockAndroidIfNoDevice) {
-        const mock = adbScanner.getSimulatedMockDevice();
-        devicesToProcess.push(mock.device);
+    if (physicalDevices.length === 0) {
+        // No physical device currently plugged in
+        return;
     }
 
-    for (const dev of devicesToProcess) {
-        console.log(`\x1b[32m[Android Connected]\x1b[0m Found: ${dev.device_name} (ID: ${dev.device_id}, Status: ${dev.usb_debugging_status})`);
+    for (const dev of physicalDevices) {
+        console.log(`\x1b[32m[Android Connected via USB]\x1b[0m Found: ${dev.device_name} (ID: ${dev.device_id}, Status: ${dev.usb_debugging_status})`);
 
-        // Sync attached device info
+        // Sync attached device info to Supabase
         if (supabase) {
             try {
                 const { error } = await supabase.from('attached_devices').upsert({
@@ -247,30 +244,21 @@ async function syncAndroidDevices() {
                     node_id: config.nodeId,
                     device_name: dev.device_name,
                     model: dev.model,
-                    android_version: dev.android_version || 'Android 14',
+                    android_version: dev.android_version || 'Android',
                     connection_type: dev.connection_type || 'usb_adb',
-                    battery_level: dev.battery_level || 90,
+                    battery_level: dev.battery_level || 100,
                     usb_debugging_status: dev.usb_debugging_status || 'authorized',
                     last_sync: new Date().toISOString()
                 }, { onConflict: 'device_id' });
-                if (error) console.error('Supabase device sync error:', error.message);
+                if (error) console.log(`  \x1b[33m[Supabase Device Sync]\x1b[0m ${error.message}`);
             } catch (err) {
-                console.error('Device sync exception:', err.message);
+                // Ignore transient network errors
             }
         }
 
-        // Pull SMS and Storage Assets
-        if (dev.is_simulated) {
-            const mock = adbScanner.getSimulatedMockDevice();
-            for (const asset of mock.assets) {
-                syncAsset({
-                    ...asset,
-                    device_id: dev.device_id,
-                    device_type: 'android'
-                });
-            }
-        } else if (dev.usb_debugging_status === 'authorized') {
-            console.log(`  📱 Extracting messages & media from physical device ${dev.device_id}...`);
+        // Pull Real SMS and Real Storage Assets
+        if (dev.usb_debugging_status === 'authorized') {
+            console.log(`  📱 Extracting messages & media from physical Android phone (${dev.device_id})...`);
             const messages = await adbScanner.extractSmsMessages(dev.device_id);
             for (const msg of messages) {
                 syncAsset({

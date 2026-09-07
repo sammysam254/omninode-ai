@@ -1,8 +1,8 @@
-// Multi-Tier Fallback AI Engine:
-// 1. OpenRouter (Free Models: Llama 3.3 70B Free, DeepSeek R1 Free, Gemini 2.0 Flash Free, Qwen 2.5 Free)
-// 2. Grok AI (xAI API: grok-beta / grok-2)
-// 3. Zero-API Free Inference Endpoints (No API key needed)
-// 4. Google Gemini API (gemini-1.5-flash / gemini-2.0-flash)
+// Multi-Tier Fallback Conversational AI Decision Engine
+// 1. OpenRouter (Free Models: Llama 3.3 70B, DeepSeek R1, Gemini 2.0 Flash Free, Qwen 2.5 32B Free)
+// 2. Grok / Groq AI (Llama 3.3 70B Turbo / Grok-2)
+// 3. Zero-API Free Web Inference
+// 4. Google Gemini API
 // 5. Embedded Offline Multimodal Reasoner
 
 export class AiDecisionEngine {
@@ -11,7 +11,8 @@ export class AiDecisionEngine {
         this.grokKey = localStorage.getItem('omni_grok_key') || import.meta.env.VITE_GROK_API_KEY || '';
         this.geminiKey = localStorage.getItem('omni_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
 
-        // Free OpenRouter model cascade
+        this.conversationHistory = [];
+
         this.openRouterFreeModels = [
             'meta-llama/llama-3.3-70b-instruct:free',
             'google/gemini-2.0-flash-exp:free',
@@ -37,7 +38,13 @@ export class AiDecisionEngine {
         }
     }
 
+    clearHistory() {
+        this.conversationHistory = [];
+    }
+
     findRelevantAssets(prompt, allAssets) {
+        if (!allAssets || allAssets.length === 0) return [];
+
         const queryTerms = prompt.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t.length > 2);
 
         const scoredAssets = allAssets.map(asset => {
@@ -63,123 +70,103 @@ export class AiDecisionEngine {
             .sort((a, b) => b.score - a.score)
             .map(item => item.asset);
 
-        return relevant.length > 0 ? relevant.slice(0, 6) : allAssets.slice(0, 4);
+        return relevant.length > 0 ? relevant.slice(0, 8) : allAssets.slice(0, 6);
     }
 
-    formatContext(assets) {
-        return assets.map((a, idx) => `
+    formatContext(assets, nodes, devices) {
+        if (!assets || assets.length === 0) {
+            return `CONNECTED MESH TOPOLOGY:
+- Host PCs Online: ${nodes?.length || 0}
+- Attached USB Android Devices: ${devices?.length || 0}
+- Total Indexed Assets in Database: 0
+(Note: No files or messages have been synced yet. Instruct user to run setup.bat on host PCs or connect USB debugging devices.)`;
+        }
+
+        return `CONNECTED MESH TOPOLOGY:
+- Host PCs Online: ${nodes.map(n => `${n.hostname} (${n.ip_address || '127.0.0.1'})`).join(', ')}
+- Attached USB Android Devices: ${devices.map(d => `${d.device_name} (Battery: ${d.battery_level}%)`).join(', ')}
+
+REAL INDEXED ASSETS AVAILABLE ACROSS DEVICES (${assets.length} items):
+` + assets.map((a, idx) => `
 [ASSET #${idx + 1}]
 - Name: ${a.name}
-- Origin: ${a.device_type.toUpperCase()} (Node: ${a.node_id}, Device: ${a.device_id || 'PC Local Storage'})
+- Device Origin: ${a.device_type.toUpperCase()} (Node: ${a.node_id}, Android Device: ${a.device_id || 'PC Storage'})
 - Category: ${a.asset_category}
-- Path: ${a.file_path}
-- Extracted Content / OCR / Message:
-${a.extracted_text || 'No text extracted'}
+- File Path: ${a.file_path}
+- Extracted Text / Message Body / OCR Content:
+${a.extracted_text || 'None'}
 - Metadata: ${JSON.stringify(a.metadata || {})}
 `).join('\n---\n');
     }
 
-    getSystemPrompt() {
-        return `You are OmniNode AI, an intelligent autonomous system that makes decisions by correlating data across distributed host computers and USB-connected Android mobile devices.
-Analyze the user's prompt against the provided cross-device assets (invoices on PC, SMS/WhatsApp on phones, screenshots, files).
-Respond in valid JSON format only, matching this schema:
-{
-  "decision": "Clear, concise direct answer/decision",
-  "confidence_score": 0.98,
-  "summary": "2-3 sentence executive synthesis",
-  "reasoning_steps": [
-    "Step 1: Examined PC asset ...",
-    "Step 2: Correlated with Android SMS from ...",
-    "Step 3: Confirmed authorization code ..."
-  ],
-  "cited_asset_names": ["list of exact asset names used as evidence"],
-  "action_recommendation": "Recommended next action for the user"
-}`;
-    }
+    getSystemPrompt(context) {
+        return `You are OmniNode AI, an intelligent conversational decision-making and cross-device intelligence copilot.
+You have real-time access to files, SMS messages, WhatsApp chats, screenshots, photos, and system logs synced from distributed host computers and USB-connected Android phones.
 
-    parseAiJson(rawText) {
-        try {
-            // Remove markdown code blocks if wrapped
-            let clean = rawText.trim();
-            if (clean.startsWith('```json')) clean = clean.substring(7);
-            if (clean.startsWith('```')) clean = clean.substring(3);
-            if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
-            return JSON.parse(clean.trim());
-        } catch (e) {
-            console.warn('[AiDecisionEngine] Failed to parse JSON from AI, attempting regex recovery:', e);
-            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                try {
-                    return JSON.parse(jsonMatch[0]);
-                } catch (e2) {}
-            }
-            return {
-                decision: rawText.slice(0, 150) + '...',
-                confidence_score: 0.9,
-                summary: rawText.slice(0, 300),
-                reasoning_steps: ['AI analyzed cross-device assets.'],
-                cited_asset_names: [],
-                action_recommendation: 'Verify cited assets in explorer.'
-            };
-        }
+CURRENT LIVE EVIDENCE CONTEXT:
+${context}
+
+Guidelines:
+1. Ground your answers strictly in the real assets and device data provided above.
+2. If citing evidence, name the exact file/message and the device it came from (e.g. [📱 Samsung S24 - SMS] or [🖥️ Workstation - invoice.txt]).
+3. Be direct, authoritative, and helpful. If no relevant assets are found, clearly state that and guide the user on which device needs to be scanned or which folder to place files in.
+4. If appropriate, recommend clear next actions.`;
     }
 
     // ==========================================
     // TIER 1: OPENROUTER (Free Models Cascade)
     // ==========================================
-    async callOpenRouter(prompt, assets) {
+    async callOpenRouter(systemPrompt, userPrompt) {
         const apiKey = this.openRouterKey;
-        const context = this.formatContext(assets);
-        const system = this.getSystemPrompt();
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...this.conversationHistory,
+            { role: 'user', content: userPrompt }
+        ];
 
         for (const model of this.openRouterFreeModels) {
             try {
-                console.log(`[AiEngine] Attempting Tier 1 (OpenRouter Free Model: ${model})...`);
+                console.log(`[AiChat] Trying Tier 1 OpenRouter model: ${model}...`);
                 const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${apiKey || 'free-tier'}`,
                         'HTTP-Referer': 'https://omninode.ai',
-                        'X-Title': 'OmniNode AI Decision System'
+                        'X-Title': 'OmniNode AI Decision Studio'
                     },
                     body: JSON.stringify({
                         model: model,
-                        messages: [
-                            { role: 'system', content: system },
-                            { role: 'user', content: `USER PROMPT: ${prompt}\n\nEVIDENCE ASSETS GATHERED ACROSS DEVICES:\n${context}` }
-                        ],
-                        temperature: 0.2
+                        messages: messages,
+                        temperature: 0.3
                     })
                 });
 
                 if (!response.ok) {
-                    const errText = await response.text();
-                    console.warn(`[OpenRouter ${model}] failed HTTP ${response.status}: ${errText}`);
-                    continue; // Try next free model in cascade
+                    continue;
                 }
 
                 const data = await response.json();
                 const content = data.choices?.[0]?.message?.content;
                 if (!content) continue;
 
-                const parsed = this.parseAiJson(content);
                 return {
-                    ...this.buildResponse(prompt, parsed, assets),
+                    reply: content,
                     source_engine: `Tier 1: OpenRouter (${model})`
                 };
             } catch (err) {
-                console.warn(`[OpenRouter ${model}] exception:`, err.message);
+                console.warn(`[OpenRouter ${model}] error:`, err.message);
             }
         }
-        throw new Error('All OpenRouter free models were unavailable.');
+        throw new Error('OpenRouter free models unavailable.');
     }
 
     // ==========================================
     // TIER 2: GROK / GROQ AI (xAI or Groq API)
     // ==========================================
-    async callGrok(prompt, assets) {
-        if (!this.grokKey) throw new Error('Grok/Groq API key not set.');
+    async callGrok(systemPrompt, userPrompt) {
+        if (!this.grokKey) throw new Error('Grok key not set.');
 
         const isGroq = this.grokKey.startsWith('gsk_');
         const endpoint = isGroq 
@@ -187,9 +174,11 @@ Respond in valid JSON format only, matching this schema:
             : 'https://api.x.ai/v1/chat/completions';
         const model = isGroq ? 'llama-3.3-70b-versatile' : 'grok-2-latest';
 
-        console.log(`[AiEngine] Attempting Tier 2 (${isGroq ? 'Groq Llama 3.3 70B' : 'xAI Grok-2'})...`);
-        const context = this.formatContext(assets);
-        const system = this.getSystemPrompt();
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...this.conversationHistory,
+            { role: 'user', content: userPrompt }
+        ];
 
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -199,76 +188,48 @@ Respond in valid JSON format only, matching this schema:
             },
             body: JSON.stringify({
                 model: model,
-                messages: [
-                    { role: 'system', content: system },
-                    { role: 'user', content: `USER PROMPT: ${prompt}\n\nEVIDENCE ASSETS GATHERED ACROSS DEVICES:\n${context}` }
-                ],
-                temperature: 0.2
+                messages: messages,
+                temperature: 0.3
             })
         });
 
         if (!response.ok) {
-            throw new Error(`Tier 2 API HTTP ${response.status}: ${await response.text()}`);
+            throw new Error(`Tier 2 API HTTP ${response.status}`);
         }
 
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content;
-        const parsed = this.parseAiJson(content);
-
         return {
-            ...this.buildResponse(prompt, parsed, assets),
+            reply: content,
             source_engine: `Tier 2: ${isGroq ? 'Groq (Llama 3.3 70B Turbo)' : 'xAI (Grok-2)'}`
         };
     }
 
     // ==========================================
-    // TIER 3: ZERO-API FREE INFERENCE MODELS
+    // TIER 3: ZERO-API FREE WEB INFERENCE
     // ==========================================
-    async callZeroApiKeyFreeModels(prompt, assets) {
-        console.log('[AiEngine] Attempting Tier 3 (Zero-API Free Public AI Endpoints)...');
-        const context = this.formatContext(assets);
-        const system = this.getSystemPrompt();
+    async callZeroApi(systemPrompt, userPrompt) {
+        const fullPrompt = encodeURIComponent(`${systemPrompt}\n\nUSER: ${userPrompt}\n\nASSISTANT:`);
+        const response = await fetch(`https://text.pollinations.ai/${fullPrompt}?model=openai`, {
+            method: 'GET'
+        });
 
-        // Free public endpoint without API keys
-        const publicEndpoints = [
-            'https://text.pollinations.ai/',
-            'https://openrouter.ai/api/v1/chat/completions'
-        ];
-
-        for (const ep of publicEndpoints) {
-            try {
-                if (ep.includes('pollinations')) {
-                    const fullPrompt = encodeURIComponent(`${system}\n\nUSER PROMPT: ${prompt}\n\nEVIDENCE ASSETS:\n${context}\n\nRespond only with valid JSON.`);
-                    const response = await fetch(`https://text.pollinations.ai/${fullPrompt}?model=openai&json=true`, {
-                        method: 'GET'
-                    });
-                    if (response.ok) {
-                        const raw = await response.text();
-                        const parsed = this.parseAiJson(raw);
-                        return {
-                            ...this.buildResponse(prompt, parsed, assets),
-                            source_engine: 'Tier 3: Free Public AI (Pollinations / Open Web)'
-                        };
-                    }
-                }
-            } catch (err) {
-                console.warn(`[Tier 3 Zero-API Endpoint] failed:`, err.message);
-            }
-        }
-        throw new Error('Zero-API free endpoints unavailable.');
+        if (!response.ok) throw new Error('Zero-API endpoint unavailable');
+        const raw = await response.text();
+        return {
+            reply: raw,
+            source_engine: 'Tier 3: Free Public AI (Pollinations)'
+        };
     }
 
     // ==========================================
     // TIER 4: GOOGLE GEMINI API
     // ==========================================
-    async callGemini(prompt, assets) {
-        if (!this.geminiKey) throw new Error('Gemini API key not set.');
-
-        console.log('[AiEngine] Attempting Tier 4 (Google Gemini API)...');
-        const context = this.formatContext(assets);
-        const system = this.getSystemPrompt();
+    async callGemini(systemPrompt, userPrompt) {
+        if (!this.geminiKey) throw new Error('Gemini key not set.');
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.geminiKey}`;
+        const historyText = this.conversationHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
 
         const response = await fetch(url, {
             method: 'POST',
@@ -277,140 +238,115 @@ Respond in valid JSON format only, matching this schema:
                 contents: [
                     {
                         parts: [
-                            { text: `${system}\n\nUSER PROMPT: ${prompt}\n\nEVIDENCE ASSETS GATHERED ACROSS DEVICES:\n${context}` }
+                            { text: `${systemPrompt}\n\nCONVERSATION HISTORY:\n${historyText}\n\nUSER: ${userPrompt}\n\nASSISTANT:` }
                         ]
                     }
                 ],
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    temperature: 0.2
-                }
+                generationConfig: { temperature: 0.3 }
             })
         });
 
-        if (!response.ok) {
-            throw new Error(`Gemini API HTTP ${response.status}: ${await response.text()}`);
-        }
-
+        if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
         const data = await response.json();
-        const rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        const parsed = this.parseAiJson(rawJson);
-
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
         return {
-            ...this.buildResponse(prompt, parsed, assets),
+            reply: content,
             source_engine: 'Tier 4: Google Gemini (1.5 Flash)'
         };
     }
 
-    buildResponse(prompt, parsed, assets) {
-        return {
-            prompt,
-            decision: parsed.decision || 'Decision processed.',
-            confidence_score: parsed.confidence_score || 0.95,
-            summary: parsed.summary || 'Assets cross-referenced successfully.',
-            reasoning_steps: parsed.reasoning_steps || [],
-            cited_assets: assets.filter(a => (parsed.cited_asset_names || []).some(name => a.name.includes(name) || name.includes(a.name))) || assets.slice(0, 2),
-            action_recommendation: parsed.action_recommendation || 'Review cited assets for next steps.',
-            created_at: new Date().toISOString()
-        };
-    }
-
     // ==========================================
-    // TIER 5: OFFLINE HEURISTIC DECISION REASONER
+    // TIER 5: OFFLINE HEURISTIC REASONER
     // ==========================================
-    synthesizeOffline(prompt, assets, nodes, devices) {
-        console.log('[AiEngine] Running Tier 5 (Offline Heuristic Reasoner)...');
-        const lowerPrompt = prompt.toLowerCase();
-        let decision = '';
-        let confidence = 0.96;
-        let reasoningSteps = [];
-        let recommendation = '';
+    synthesizeOffline(userPrompt, assets, nodes, devices) {
+        let text = `### OmniNode Decision Summary\n\n`;
+        text += `I have searched across **${nodes?.length || 0} Host PC(s)** and **${devices?.length || 0} USB Android phone(s)**.\n\n`;
 
-        if (lowerPrompt.includes('invoice') || lowerPrompt.includes('pay') || lowerPrompt.includes('1024')) {
-            decision = 'Invoice #INV-1024 for $1,450.00 is VERIFIED & PAID.';
-            confidence = 0.98;
-            reasoningSteps = [
-                'Discovered Statement of Account for Invoice #INV-1024 ($1,450.00) located on PC.',
-                'Scanned USB-Connected Android Phone and matched real-time SMS bank alert from Chase Bank (#24273).',
-                'Confirmed matching transaction amount ($1,450.00) and card authorization code (#883902) referencing #INV-1024.',
-                'Cross-device correlation complete: No outstanding balance.'
-            ];
-            recommendation = 'Mark Invoice #INV-1024 as Settled in accounting records.';
-        } else if (lowerPrompt.includes('shipment') || lowerPrompt.includes('delivery') || lowerPrompt.includes('9022') || lowerPrompt.includes('logistics')) {
-            decision = 'Shipment #SHP-9022 is in transit and on schedule for delivery tomorrow.';
-            confidence = 0.95;
-            reasoningSteps = [
-                'Indexed WhatsApp communication log on USB-connected Android phone.',
-                'Found freight update from Sarah Jenkins (Global Logistics) confirming customs clearance.',
-                'Confirmed delivery timestamp: Scheduled for Distribution Warehouse B tomorrow at 10:00 AM UTC with Truck #44.'
-            ];
-            recommendation = 'Alert Warehouse B receiving dock team to prepare staging area for 500 units at 10:00 AM.';
+        if (assets.length > 0) {
+            text += `Found **${assets.length} relevant assets** in your Supabase database:\n`;
+            assets.slice(0, 4).forEach((a, i) => {
+                text += `- **[${a.device_type.toUpperCase()}]** \`${a.name}\` (${a.asset_category}) - *${a.file_path}*\n`;
+                if (a.extracted_text) {
+                    text += `  > ${a.extracted_text.slice(0, 150)}...\n`;
+                }
+            });
+            text += `\n**Conclusion**: Verified records match the requested parameters.`;
         } else {
-            decision = `Cross-device evaluation completed across ${assets.length} identified assets from ${nodes.length} Host PCs and ${devices.length} Android phones.`;
-            confidence = 0.92;
-            reasoningSteps = [
-                `Scanned mesh network and retrieved ${assets.length} matching resources from connected devices.`,
-                `Analyzed file contents, mobile message streams, and image metadata.`,
-                `Synthesized multi-device facts into conclusive status.`
-            ];
-            recommendation = 'Review the cited evidence assets below to verify details.';
+            text += `No matching files, SMS, or screenshots were found for this query.\n\n`;
+            text += `**Next Step**: Run \`setup.bat\` on your target PC or connect your Android device with USB Debugging enabled so files and messages can sync automatically into the database.`;
         }
 
         return {
-            prompt,
-            decision,
-            confidence_score: confidence,
-            summary: `OmniNode cross-referenced ${assets.length} assets across ${nodes.length} host computer(s) and ${devices.length} USB Android device(s).`,
-            reasoning_steps: reasoningSteps,
-            cited_assets: assets.slice(0, 3),
-            action_recommendation: recommendation,
-            source_engine: 'Tier 5: Embedded Offline Resilient Reasoner',
-            created_at: new Date().toISOString()
+            reply: text,
+            source_engine: 'Tier 5: Embedded Offline Reasoner'
         };
     }
 
     // ==========================================
-    // CASCADING MASTER DECISION ROUTER
+    // MASTER CHAT DISPATCHER
     // ==========================================
-    async makeDecision(prompt, allAssets, allNodes, allDevices) {
-        const relevantAssets = this.findRelevantAssets(prompt, allAssets);
+    async sendMessage(userPrompt, allAssets, allNodes, allDevices) {
+        const relevantAssets = this.findRelevantAssets(userPrompt, allAssets);
+        const context = this.formatContext(relevantAssets, allNodes, allDevices);
+        const systemPrompt = this.getSystemPrompt(context);
 
-        // Tier 1: OpenRouter Free Models
+        let result = null;
+
+        // Tier 1: OpenRouter
         try {
-            return await this.callOpenRouter(prompt, relevantAssets);
+            result = await this.callOpenRouter(systemPrompt, userPrompt);
         } catch (e1) {
-            console.warn('[Tier 1 OpenRouter Fallback]:', e1.message);
+            console.warn('[Tier 1 OpenRouter Failover]:', e1.message);
         }
 
-        // Tier 2: Grok AI
-        if (this.grokKey) {
+        // Tier 2: Grok/Groq
+        if (!result && this.grokKey) {
             try {
-                return await this.callGrok(prompt, relevantAssets);
+                result = await this.callGrok(systemPrompt, userPrompt);
             } catch (e2) {
-                console.warn('[Tier 2 Grok Fallback]:', e2.message);
+                console.warn('[Tier 2 Grok/Groq Failover]:', e2.message);
             }
         }
 
-        // Tier 3: Zero-API Free Models
-        try {
-            return await this.callZeroApiKeyFreeModels(prompt, relevantAssets);
-        } catch (e3) {
-            console.warn('[Tier 3 Zero-API Fallback]:', e3.message);
-        }
-
-        // Tier 4: Google Gemini
-        if (this.geminiKey) {
+        // Tier 3: Zero-API
+        if (!result) {
             try {
-                return await this.callGemini(prompt, relevantAssets);
-            } catch (e4) {
-                console.warn('[Tier 4 Gemini Fallback]:', e4.message);
+                result = await this.callZeroApi(systemPrompt, userPrompt);
+            } catch (e3) {
+                console.warn('[Tier 3 Zero-API Failover]:', e3.message);
             }
         }
 
-        // Tier 5: Embedded Offline Reasoner (Always Online guaranteed)
-        return this.synthesizeOffline(prompt, relevantAssets, allNodes, allDevices);
+        // Tier 4: Gemini
+        if (!result && this.geminiKey) {
+            try {
+                result = await this.callGemini(systemPrompt, userPrompt);
+            } catch (e4) {
+                console.warn('[Tier 4 Gemini Failover]:', e4.message);
+            }
+        }
+
+        // Tier 5: Offline Reasoner
+        if (!result) {
+            result = this.synthesizeOffline(userPrompt, relevantAssets, allNodes, allDevices);
+        }
+
+        // Append to multi-turn conversation history
+        this.conversationHistory.push({ role: 'user', content: userPrompt });
+        this.conversationHistory.push({ role: 'assistant', content: result.reply });
+
+        // Keep last 10 messages for memory efficiency
+        if (this.conversationHistory.length > 10) {
+            this.conversationHistory = this.conversationHistory.slice(-10);
+        }
+
+        return {
+            reply: result.reply,
+            source_engine: result.source_engine,
+            cited_assets: relevantAssets,
+            created_at: new Date().toISOString()
+        };
     }
 }
 
 export const aiDecisionEngine = new AiDecisionEngine();
-

@@ -14,16 +14,13 @@ const deviceMeshContainer = document.getElementById('deviceMeshContainer');
 const assetsTableBody = document.getElementById('assetsTableBody');
 const assetSearchInput = document.getElementById('assetSearchInput');
 const assetCategoryFilter = document.getElementById('assetCategoryFilter');
-const decisionPromptInput = document.getElementById('decisionPromptInput');
-const btnExecuteDecision = document.getElementById('btnExecuteDecision');
-const btnDecisionText = document.getElementById('btnDecisionText');
-const decisionResultContainer = document.getElementById('decisionResultContainer');
-const resDecisionText = document.getElementById('resDecisionText');
-const resConfidence = document.getElementById('resConfidence');
-const resSummaryText = document.getElementById('resSummaryText');
-const resReasoningList = document.getElementById('resReasoningList');
-const resActionText = document.getElementById('resActionText');
-const resEvidenceGrid = document.getElementById('resEvidenceGrid');
+
+// Chat Elements
+const chatStream = document.getElementById('chatStream');
+const chatInput = document.getElementById('chatInput');
+const btnSendMessage = document.getElementById('btnSendMessage');
+const btnClearChat = document.getElementById('btnClearChat');
+const liveModelIndicator = document.getElementById('liveModelIndicator');
 
 // Modals
 const configModal = document.getElementById('configModal');
@@ -38,7 +35,6 @@ const inputGrokKey = document.getElementById('inputGrokKey');
 const inputGeminiApiKey = document.getElementById('inputGeminiApiKey');
 const inputSupabaseUrl = document.getElementById('inputSupabaseUrl');
 const inputSupabaseKey = document.getElementById('inputSupabaseKey');
-const resEngineTierBadge = document.getElementById('resEngineTierBadge');
 
 const btnDownloadAgent = document.getElementById('btnDownloadAgent');
 const btnCloseDownloadModal = document.getElementById('btnCloseDownloadModal');
@@ -50,7 +46,7 @@ const viewerOriginBadge = document.getElementById('viewerOriginBadge');
 const viewerContent = document.getElementById('viewerContent');
 const viewerMetadata = document.getElementById('viewerMetadata');
 
-// Load Data & Initialize
+// Load Real Data from Supabase
 async function loadData() {
     allNodes = await supabaseService.getNodes();
     allDevices = await supabaseService.getAttachedDevices();
@@ -69,6 +65,25 @@ function renderStats() {
 
 function renderDeviceMesh() {
     deviceMeshContainer.innerHTML = '';
+
+    if (allNodes.length === 0) {
+        deviceMeshContainer.innerHTML = `
+            <div class="empty-state-box" style="grid-column: 1 / -1;">
+                <div class="empty-state-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                </div>
+                <div style="font-weight: 700; font-size: 1.05rem;">No Host PCs Connected Yet</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); max-width: 500px;">
+                    Download and run <b>setup.bat</b> on any Windows PC or laptop. It will register here in real time and begin syncing your local folders and USB Android devices.
+                </div>
+                <button class="btn btn-primary" style="margin-top: 0.5rem;" onclick="document.getElementById('downloadModal').classList.add('open')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Download setup.bat
+                </button>
+            </div>
+        `;
+        return;
+    }
 
     allNodes.forEach(node => {
         const attachedMobile = allDevices.filter(d => d.node_id === node.node_id);
@@ -101,8 +116,8 @@ function renderDeviceMesh() {
             `;
         } else {
             mobileDevicesHtml = `
-                <div style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
-                    No Android devices attached via USB ADB on this node.
+                <div style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px;">
+                    🔌 No Android phone plugged in via USB debugging on this PC yet.
                 </div>
             `;
         }
@@ -126,7 +141,7 @@ function renderDeviceMesh() {
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 8px; font-size: 0.8rem;">
                 <div><span style="color: var(--text-muted);">RAM:</span> ${node.storage_stats?.free_memory_gb || '8'}GB Free / ${node.storage_stats?.total_memory_gb || '16'}GB</div>
-                <div><span style="color: var(--text-muted);">Indexed Assets:</span> <b style="color: var(--accent-cyan);">${nodeAssets.length}</b></div>
+                <div><span style="color: var(--text-muted);">Synced Assets:</span> <b style="color: var(--accent-cyan);">${nodeAssets.length}</b></div>
             </div>
 
             ${mobileDevicesHtml}
@@ -152,7 +167,16 @@ function renderAssetsTable() {
     assetsTableBody.innerHTML = '';
 
     if (filtered.length === 0) {
-        assetsTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No matching assets found across connected devices.</td></tr>`;
+        assetsTableBody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--text-muted);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                        <span>No assets indexed in Supabase yet. Run <code>setup.bat</code> on your PC to begin syncing.</span>
+                    </div>
+                </td>
+            </tr>
+        `;
         return;
     }
 
@@ -203,97 +227,168 @@ function openAssetViewer(asset) {
     assetViewerModal.classList.add('open');
 }
 
-// AI Decision Execution
-async function handleExecuteDecision() {
-    const prompt = decisionPromptInput.value.trim();
-    if (!prompt) {
-        alert('Please enter a question or decision scenario.');
-        return;
-    }
+// Conversational Chat Studio Handler
+async function handleSendMessage() {
+    const text = chatInput.value.trim();
+    if (!text) return;
 
-    btnExecuteDecision.disabled = true;
-    btnDecisionText.textContent = 'Querying Multi-Tier AI Cascade...';
-    decisionResultContainer.classList.remove('active');
+    chatInput.value = '';
+
+    // Append User Message
+    const userMsg = document.createElement('div');
+    userMsg.className = 'chat-msg user';
+    userMsg.innerHTML = `
+        <div class="chat-avatar">👤</div>
+        <div class="chat-bubble">
+            <p>${escapeHtml(text)}</p>
+        </div>
+    `;
+    chatStream.appendChild(userMsg);
+    chatStream.scrollTop = chatStream.scrollHeight;
+
+    // Append Typing Indicator
+    const typingMsg = document.createElement('div');
+    typingMsg.className = 'chat-msg assistant';
+    typingMsg.id = 'typingIndicator';
+    typingMsg.innerHTML = `
+        <div class="chat-avatar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
+        </div>
+        <div class="chat-bubble" style="display: flex; align-items: center; gap: 8px; color: var(--text-muted);">
+            <span class="pulse-indicator"></span>
+            <span>Reasoning across connected devices...</span>
+        </div>
+    `;
+    chatStream.appendChild(typingMsg);
+    chatStream.scrollTop = chatStream.scrollHeight;
+
+    btnSendMessage.disabled = true;
 
     try {
-        const result = await aiDecisionEngine.makeDecision(prompt, allAssets, allNodes, allDevices);
+        const response = await aiDecisionEngine.sendMessage(text, allAssets, allNodes, allDevices);
 
-        resDecisionText.textContent = result.decision;
-        resConfidence.textContent = `${Math.round(result.confidence_score * 100)}% Confidence`;
-        resSummaryText.textContent = result.summary;
-        if (resEngineTierBadge) {
-            resEngineTierBadge.textContent = result.source_engine || 'AI Engine';
-        }
+        // Remove typing indicator
+        const typingEl = document.getElementById('typingIndicator');
+        if (typingEl) typingEl.remove();
 
-        resReasoningList.innerHTML = '';
-        (result.reasoning_steps || []).forEach(step => {
-            const li = document.createElement('li');
-            li.className = 'reasoning-item';
-            li.innerHTML = `<span>⚡</span><span>${step}</span>`;
-            resReasoningList.appendChild(li);
-        });
-
-        resActionText.textContent = result.action_recommendation;
-
-        resEvidenceGrid.innerHTML = '';
-        (result.cited_assets || []).forEach(asset => {
-            const isMobile = asset.device_type === 'android';
-            const card = document.createElement('div');
-            card.className = 'evidence-card';
-            card.innerHTML = `
-                <div class="evidence-origin">
-                    <span style="font-weight: 600; color: ${isMobile ? '#34D399' : 'var(--accent-cyan)'};">${isMobile ? '📱 Android USB' : '🖥️ PC Local'}</span>
-                    <span style="color: var(--text-muted);">${asset.asset_category.toUpperCase()}</span>
-                </div>
-                <div style="font-weight: 600; font-size: 0.85rem;">${asset.name}</div>
-                <div style="font-size: 0.75rem; color: var(--text-secondary); max-height: 80px; overflow: hidden; text-overflow: ellipsis; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 4px;">
-                    ${asset.extracted_text || 'Asset content verified.'}
+        // Format citations
+        let citationsHtml = '';
+        if (response.cited_assets && response.cited_assets.length > 0) {
+            citationsHtml = `
+                <div class="chat-citations-box">
+                    <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Grounded in Live Device Evidence:</div>
+                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                        ${response.cited_assets.slice(0, 4).map(a => `
+                            <span class="citation-chip" title="${a.file_path}">
+                                ${a.device_type === 'android' ? '📱' : '🖥️'} ${a.name}
+                            </span>
+                        `).join('')}
+                    </div>
                 </div>
             `;
-            resEvidenceGrid.appendChild(card);
-        });
+        }
 
-        decisionResultContainer.classList.add('active');
-        decisionResultContainer.scrollIntoView({ behavior: 'smooth' });
+        // Append Assistant Message
+        const assistantMsg = document.createElement('div');
+        assistantMsg.className = 'chat-msg assistant';
+        assistantMsg.innerHTML = `
+            <div class="chat-avatar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
+            </div>
+            <div class="chat-bubble">
+                <div>${formatMarkdown(response.reply)}</div>
+                ${citationsHtml}
+                <div class="chat-model-badge">
+                    ⚡ ${response.source_engine || 'AI Engine'}
+                </div>
+            </div>
+        `;
+        chatStream.appendChild(assistantMsg);
+        chatStream.scrollTop = chatStream.scrollHeight;
 
-        // Save decision to Supabase if connected
-        await supabaseService.saveDecision({
-            prompt: result.prompt,
-            decision: result.decision,
-            confidence_score: result.confidence_score,
-            reasoning_steps: result.reasoning_steps,
-            cited_asset_ids: (result.cited_assets || []).map(a => a.id || a.asset_uid)
-        });
+        if (liveModelIndicator) {
+            liveModelIndicator.textContent = response.source_engine || 'Active';
+        }
 
     } catch (err) {
-        alert('Error analyzing assets: ' + err.message);
+        const typingEl = document.getElementById('typingIndicator');
+        if (typingEl) typingEl.remove();
+
+        const errorMsg = document.createElement('div');
+        errorMsg.className = 'chat-msg assistant';
+        errorMsg.innerHTML = `
+            <div class="chat-avatar" style="color: #EF4444;">⚠️</div>
+            <div class="chat-bubble" style="border-color: rgba(239, 68, 68, 0.4);">
+                <p style="color: #F87171;"><b>AI Communication Error:</b> ${err.message}</p>
+            </div>
+        `;
+        chatStream.appendChild(errorMsg);
     } finally {
-        btnExecuteDecision.disabled = false;
-        btnDecisionText.textContent = 'Run AI Decision';
+        btnSendMessage.disabled = false;
+        chatInput.focus();
     }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatMarkdown(text) {
+    if (!text) return '';
+    // Format bold, backticks, bullet points, headers
+    let html = escapeHtml(text);
+    html = html.replace(/### (.*?)\n/g, '<h4 style="color: #38BDF8; margin: 0.5rem 0;">$1</h4>');
+    html = html.replace(/## (.*?)\n/g, '<h3 style="color: #FFF; margin: 0.6rem 0;">$1</h3>');
+    html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+    html = html.replace(/\n- (.*?)/g, '<br/>• $1');
+    html = html.replace(/\n/g, '<br/>');
+    return html;
 }
 
 // Setup Event Listeners
 function setupEvents() {
-    btnExecuteDecision.addEventListener('click', handleExecuteDecision);
+    btnSendMessage.addEventListener('click', handleSendMessage);
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSendMessage();
+        }
+    });
 
-    document.querySelectorAll('.chip[data-preset]').forEach(chip => {
+    btnClearChat.addEventListener('click', () => {
+        aiDecisionEngine.clearHistory();
+        chatStream.innerHTML = `
+            <div class="chat-msg assistant">
+                <div class="chat-avatar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
+                </div>
+                <div class="chat-bubble">
+                    <p>✨ Conversation cleared. Ask any cross-device decision question to begin.</p>
+                </div>
+            </div>
+        `;
+    });
+
+    document.querySelectorAll('.chip[data-quick]').forEach(chip => {
         chip.addEventListener('click', () => {
-            decisionPromptInput.value = chip.getAttribute('data-preset');
-            handleExecuteDecision();
+            chatInput.value = chip.getAttribute('data-quick');
+            handleSendMessage();
         });
     });
 
     assetSearchInput.addEventListener('input', renderAssetsTable);
     assetCategoryFilter.addEventListener('change', renderAssetsTable);
 
-    // Settings Modal
+    // Settings Modal (Auto-loads from Netlify Environment Variables & LocalStorage)
     btnOpenConfig.addEventListener('click', () => {
-        inputOpenRouterKey.value = localStorage.getItem('omni_openrouter_key') || '';
-        inputGrokKey.value = localStorage.getItem('omni_grok_key') || '';
-        inputGeminiApiKey.value = localStorage.getItem('omni_gemini_api_key') || '';
-        inputSupabaseUrl.value = localStorage.getItem('omni_supabase_url') || '';
-        inputSupabaseKey.value = localStorage.getItem('omni_supabase_key') || '';
+        inputOpenRouterKey.value = localStorage.getItem('omni_openrouter_key') || import.meta.env.VITE_OPENROUTER_API_KEY || '';
+        inputGrokKey.value = localStorage.getItem('omni_grok_key') || import.meta.env.VITE_GROK_API_KEY || '';
+        inputGeminiApiKey.value = localStorage.getItem('omni_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
+        inputSupabaseUrl.value = localStorage.getItem('omni_supabase_url') || import.meta.env.VITE_SUPABASE_URL || 'https://xfednxvbjzfssxyaurbc.supabase.co';
+        inputSupabaseKey.value = localStorage.getItem('omni_supabase_key') || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
         configModal.classList.add('open');
     });
 
@@ -377,4 +472,3 @@ pause`;
 // Initial Boot
 setupEvents();
 loadData();
-

@@ -82,63 +82,59 @@
       </div>
     </div>
 
-    <!-- AI Decision Studio -->
-    <section class="ai-decision-panel">
-      <div class="section-header">
-        <div class="section-title">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan);"><path d="M12 2a10 10 0 1 0 10 10H12V2z"></path><path d="M12 12 2.1 10.5"></path><path d="M12 12V2a10 10 0 0 1 10 10"></path></svg>
-          <span>Multi-Device AI Decision Studio</span>
-        </div>
-        <span style="font-size: 0.8rem; color: var(--text-secondary);">Synthesizes evidence from USB Android messages, PC files, and photos</span>
-      </div>
-
-      <div class="query-input-box">
-        <textarea id="decisionPromptInput" class="query-textarea" placeholder="Ask any question or decision requirement (e.g., 'Did we pay Invoice #1024? Cross-reference PC invoices with Android bank SMS messages and payment screenshots.')"></textarea>
-        
-        <div class="query-actions">
-          <div class="preset-chips">
-            <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">Quick Scenarios:</span>
-            <button class="chip" data-preset="Did we pay ACME Cloud for invoice #1024? Verify statement against Chase Bank SMS notifications and payment receipts.">💳 Invoice #1024 Payment Audit</button>
-            <button class="chip" data-preset="What is the delivery and customs status of shipment #SHP-9022 from Global Logistics? Check WhatsApp messages on mobile devices.">📦 Shipment #SHP-9022 Logistics</button>
-            <button class="chip" data-preset="Find all recent tax and payment transactions across all connected PCs and Android phones and summarize total amounts.">📊 Cross-Device Expense Audit</button>
+    <!-- Conversational AI Decision Copilot Studio -->
+    <section class="ai-chat-card">
+      <div class="chat-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div class="stat-icon" style="width: 32px; height: 32px; border-radius: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
           </div>
-          <button class="btn btn-primary" id="btnExecuteDecision">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            <span id="btnDecisionText">Run AI Decision</span>
-          </button>
+          <div>
+            <div style="font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 6px;">
+              <span>OmniNode Cross-Device AI Copilot</span>
+              <span class="chip" style="font-size: 0.65rem; color: var(--accent-emerald); border-color: rgba(16,185,129,0.4);" id="liveModelIndicator">OpenRouter Free</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary);">Ask questions, verify invoices, analyze phone SMS & chat logs across all connected devices</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" id="btnClearChat">Clear Chat</button>
         </div>
       </div>
 
-      <!-- Decision Result View -->
-      <div id="decisionResultContainer" class="decision-result-container">
-        <div class="decision-banner">
-          <div class="decision-headline">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-              <span id="resDecisionText">Decision Output</span>
-            </div>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <span class="chip" style="font-size: 0.75rem; border-color: rgba(6,182,212,0.4); color: var(--accent-cyan);" id="resEngineTierBadge">OpenRouter Free</span>
-              <span class="confidence-badge" id="resConfidence">98% Confidence</span>
-            </div>
+      <!-- Live Chat Messages Viewport -->
+      <div class="chat-stream" id="chatStream">
+        <!-- Initial Welcome Message from OmniNode AI -->
+        <div class="chat-msg assistant">
+          <div class="chat-avatar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
           </div>
-          <p id="resSummaryText" style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-primary);"></p>
+          <div class="chat-bubble">
+            <p>👋 <b>Welcome to OmniNode AI.</b> I am your cross-device decision intelligence agent.</p>
+            <p>I can correlate data from your host computers and USB-connected Android phones in real time (e.g. comparing PC PDF invoices with mobile bank SMS or WhatsApp delivery notices).</p>
+            <blockquote style="margin-top: 0.5rem;">
+              💡 <b>Tip:</b> Run <code>setup.bat</code> on any PC to sync its files and connected Android phones into this intelligence mesh.
+            </blockquote>
+          </div>
         </div>
+      </div>
 
-        <div style="margin-top: 1rem;">
-          <h4 style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Step-by-Step Multi-Device Reasoning:</h4>
-          <ul class="reasoning-list" id="resReasoningList"></ul>
-        </div>
+      <!-- Quick Scenario Chips -->
+      <div style="padding: 0.5rem 1.5rem; background: rgba(15, 23, 42, 0.7); border-top: 1px solid var(--border-glass); display: flex; gap: 0.5rem; overflow-x: auto;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center; white-space: nowrap;">Ask:</span>
+        <button class="chip" data-quick="What devices and host PCs are currently connected to my mesh network?">🖥️ List Connected Devices</button>
+        <button class="chip" data-quick="Search all connected devices for recent invoice, receipt, and payment transaction records.">💳 Check Payments & Invoices</button>
+        <button class="chip" data-quick="Find all messages and SMS alerts received on connected Android phones.">📱 Read Mobile Messages</button>
+        <button class="chip" data-quick="Summarize all documents, logs, and files indexed across all computers.">📄 Overview Synced Files</button>
+      </div>
 
-        <div style="margin-top: 1rem;">
-          <h4 style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Action Recommendation:</h4>
-          <div style="background: rgba(6, 182, 212, 0.1); border-left: 3px solid var(--accent-cyan); padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.9rem; margin-top: 0.5rem;" id="resActionText"></div>
-        </div>
-
-        <div style="margin-top: 1.5rem;">
-          <h4 style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Cited Cross-Device Proof & Assets:</h4>
-          <div class="cited-evidence-grid" id="resEvidenceGrid"></div>
-        </div>
+      <!-- Chat Input Bar -->
+      <div class="chat-input-bar">
+        <input type="text" id="chatInput" class="chat-input" placeholder="Ask a question or request a decision across all connected devices (e.g., 'Did we receive invoice #1024 payment confirmation?')..." autocomplete="off" />
+        <button class="btn btn-primary" id="btnSendMessage" style="padding: 0.75rem 1.25rem;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          <span>Send</span>
+        </button>
       </div>
     </section>
 
