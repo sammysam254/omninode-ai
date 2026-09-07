@@ -15,6 +15,7 @@ class SupabaseService {
         this.cachedNodes = JSON.parse(localStorage.getItem('omni_cached_nodes') || '[]');
         this.cachedDevices = JSON.parse(localStorage.getItem('omni_cached_devices') || '[]');
         this.cachedAssets = JSON.parse(localStorage.getItem('omni_cached_assets') || '[]');
+        this.realtimeChannels = [];
         this.inFlightFetch = null;
         this.init();
     }

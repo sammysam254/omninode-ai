@@ -18,9 +18,11 @@ export class AiDecisionEngine {
         this.conversationHistory = [];
 
         this.openRouterFastModels = [
-            'liquid/lfm-2.5-2.6b:free',
             'meta-llama/llama-3.2-3b-instruct:free',
-            'nvidia/nemotron-3.5-lightning:free',
+            'qwen/qwen-2.5-coder-32b-instruct:free',
+            'meta-llama/llama-3.1-8b-instruct:free',
+            'mistralai/mistral-7b-instruct:free',
+            'google/gemini-2.0-flash-exp:free',
             'openrouter/auto'
         ];
     }
@@ -46,6 +48,15 @@ export class AiDecisionEngine {
 
     setHistory(history) {
         this.conversationHistory = history || [];
+    }
+
+    cleanReply(content) {
+        if (!content) return '';
+        return content
+            .replace(/<\|tool_call_start\|>[\s\S]*?<\|tool_call_end\|>/gi, '')
+            .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+            .replace(/\[get_[a-zA-Z0-9_]+\([^)]*\)\]/gi, '')
+            .trim();
     }
 
     findRelevantAssets(prompt, allAssets) {
@@ -77,8 +88,8 @@ export class AiDecisionEngine {
                 }
             }
 
-            if (isMessageQuery && (asset.asset_category === 'message' || asset.name.toLowerCase().includes('sms'))) {
-                score += 5;
+            if (isMessageQuery && (asset.asset_category === 'message' || asset.name.toLowerCase().includes('sms') || fullText.includes('mpesa'))) {
+                score += 8;
             }
 
             return { asset, score };
@@ -105,18 +116,17 @@ export class AiDecisionEngine {
     }
 
     getSystemPrompt(context) {
-        return `You are OmniNode AI, an intelligent, concise, and helpful cross-device AI assistant like Google Gemini.
-You have real-time live background access to the user's host PC files and USB-connected Android phone (SMS messages, documents, photos, invoices).
+        return `You are OmniNode AI Copilot, an intelligent, concise, and helpful cross-device AI assistant.
+You have real-time live background access to the user's host PC files and USB-connected Android phone (SMS messages, MPESA transactions, contacts, documents).
 
 CURRENT REAL-TIME CONNECTED DEVICES & EVIDENCE (Sorted Newest First):
 ${context}
 
-Instructions:
-1. Answer the user's questions directly, concisely, and naturally.
-2. When answering about SMS messages, banking, or MPESA alerts, refer to the most recent messages at the top.
-3. If the user says a greeting (like "hi" or "hello"), reply warmly and helpfully in 1-2 friendly sentences.
-4. When asked about specific files, phone messages, MPESA transactions, or code, provide clean, exact answers.
-5. Format lists and code using clean markdown.`;
+CRITICAL INSTRUCTIONS:
+1. NEVER output raw tool tags, XML markers, or syntax like <|tool_call_start|>. You must ALWAYS answer directly in natural human conversational markdown.
+2. If asked about the latest MPESA message or SMS, read the newest messages provided in the evidence above and summarize the sender, amount, transaction code, date/time, and status cleanly.
+3. If no SMS messages are in context, state clearly that the phone is connected and give a helpful direct answer.
+4. Keep replies clear, intelligent, formatted with markdown, and concise.`;
     }
 
     // ==========================================
@@ -161,8 +171,11 @@ Instructions:
                 const content = data.choices?.[0]?.message?.content;
                 if (!content) continue;
 
+                const cleaned = this.cleanReply(content);
+                if (!cleaned || cleaned.length < 3) continue;
+
                 return {
-                    reply: content,
+                    reply: cleaned,
                     source_engine: `Tier 1: OpenRouter (${model.replace(':free', '')})`
                 };
             } catch (err) {
