@@ -112,9 +112,9 @@ class AdbScanner {
         };
     }
 
-    // Comprehensive Mobile SMS Extractor
+    // Comprehensive Mobile SMS Extractor (Sorted by newest first)
     async extractSmsMessages(serial) {
-        const cmd = `-s ${serial} shell content query --uri content://sms --projection address,body,date,type`;
+        const cmd = `-s ${serial} shell content query --uri content://sms --projection address,body,date,type --sort date\\ DESC`;
         const res = await this.execCommand(cmd);
         const messages = [];
 
@@ -130,22 +130,25 @@ class AdbScanner {
                 if (bodyMatch) {
                     const sender = addressMatch ? addressMatch[1].trim() : 'Unknown';
                     const body = bodyMatch[1].trim();
-                    const timestamp = dateMatch ? new Date(parseInt(dateMatch[1], 10)).toISOString() : new Date().toISOString();
+                    const rawDate = dateMatch ? parseInt(dateMatch[1], 10) : Date.now();
+                    const timestamp = new Date(rawDate).toISOString();
                     const isIncoming = typeMatch ? typeMatch[1] === '1' : true;
 
                     messages.push({
                         name: `SMS from ${sender}`,
-                        file_path: `/sdcard/Messages/sms_${Date.now()}_${messages.length}.txt`,
+                        file_path: `/sdcard/Messages/sms_${rawDate}_${messages.length}.txt`,
                         asset_category: 'message',
                         mime_type: 'text/plain',
                         extracted_text: `[SMS ${isIncoming ? 'Received from' : 'Sent to'}: ${sender}] [Time: ${timestamp}]\n${body}`,
                         metadata: {
                             sender,
                             timestamp,
+                            raw_timestamp: rawDate,
                             direction: isIncoming ? 'inbound' : 'outbound',
                             protocol: 'SMS',
                             source: 'USB_Physical_Android'
-                        }
+                        },
+                        last_modified: timestamp
                     });
                 }
             }

@@ -405,6 +405,9 @@ async function handleSendMessage(promptText) {
     showTypingIndicator();
 
     try {
+        // Real-time on-demand refresh of live devices and assets at exact moment of request
+        await loadBackgroundData();
+
         const result = await aiDecisionEngine.chat(prompt, allAssets, allNodes, allDevices);
         removeTypingIndicator();
 
