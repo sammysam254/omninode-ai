@@ -54,9 +54,12 @@ if not exist ".env" (
     if exist "..\.env" (
         copy ..\.env .env >nul
         echo [*] Copied .env configuration.
-    ) else if exist ".env.example" (
-        copy .env.example .env >nul
-        echo [*] Created .env configuration from template.
+    ) else (
+        (
+            echo SUPABASE_URL=https://xfednxvbjzfssxyaurbc.supabase.co
+            echo SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmZWRueHZianpmc3N4eWF1cmJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDQxNzIsImV4cCI6MjEwNDM4MDE3Mn0.2CRXJvkmTUaFXkyGxaSUY0OS1ZCxr0EwLFxJljiFqjc
+        ) > .env
+        echo [*] Auto-generated .env configuration with Supabase credentials.
     )
 )
 

@@ -472,3 +472,4 @@ pause`;
 // Initial Boot
 setupEvents();
 loadData();
+setInterval(loadData, 3500);

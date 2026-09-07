@@ -75,16 +75,22 @@ if not exist "web\node_modules" (
 if not exist "agent\.env" (
     if exist ".env" (
         copy .env agent\.env >nul
-    ) else if exist "agent\.env.example" (
-        copy agent\.env.example agent\.env >nul
+    ) else (
+        (
+            echo SUPABASE_URL=https://xfednxvbjzfssxyaurbc.supabase.co
+            echo SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmZWRueHZianpmc3N4eWF1cmJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDQxNzIsImV4cCI6MjEwNDM4MDE3Mn0.2CRXJvkmTUaFXkyGxaSUY0OS1ZCxr0EwLFxJljiFqjc
+        ) > agent\.env
     )
 )
 
 if not exist "web\.env" (
     if exist ".env.netlify" (
         copy .env.netlify web\.env >nul
-    ) else if exist ".env.netlify.example" (
-        copy .env.netlify.example web\.env >nul
+    ) else (
+        (
+            echo VITE_SUPABASE_URL=https://xfednxvbjzfssxyaurbc.supabase.co
+            echo VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmZWRueHZianpmc3N4eWF1cmJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDQxNzIsImV4cCI6MjEwNDM4MDE3Mn0.2CRXJvkmTUaFXkyGxaSUY0OS1ZCxr0EwLFxJljiFqjc
+        ) > web\.env
     )
 )
 

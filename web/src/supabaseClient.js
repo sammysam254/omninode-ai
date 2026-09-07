@@ -1,9 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
+const DEFAULT_SUPABASE_URL = 'https://xfednxvbjzfssxyaurbc.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmZWRueHZianpmc3N4eWF1cmJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDQxNzIsImV4cCI6MjEwNDM4MDE3Mn0.2CRXJvkmTUaFXkyGxaSUY0OS1ZCxr0EwLFxJljiFqjc';
+
 class SupabaseService {
     constructor() {
-        this.url = localStorage.getItem('omni_supabase_url') || import.meta.env.VITE_SUPABASE_URL || 'https://xfednxvbjzfssxyaurbc.supabase.co';
-        this.key = localStorage.getItem('omni_supabase_key') || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+        const storedUrl = localStorage.getItem('omni_supabase_url');
+        const storedKey = localStorage.getItem('omni_supabase_key');
+
+        this.url = (storedUrl && storedUrl.length > 5) ? storedUrl : DEFAULT_SUPABASE_URL;
+        this.key = (storedKey && storedKey.length > 10) ? storedKey : DEFAULT_SUPABASE_KEY;
         this.client = null;
         this.isConfigured = false;
         this.realtimeChannels = [];
@@ -11,23 +17,22 @@ class SupabaseService {
     }
 
     init() {
-        if (this.url && this.key && !this.url.includes('YOUR_SUPABASE') && !this.url.includes('your-project')) {
-            try {
-                this.client = createClient(this.url, this.key);
-                this.isConfigured = true;
-                console.log('[SupabaseService] Connected to Supabase:', this.url);
-            } catch (err) {
-                console.error('[SupabaseService] Init error:', err);
-                this.isConfigured = false;
-            }
-        } else {
+        try {
+            this.client = createClient(this.url, this.key, {
+                auth: { persistSession: false },
+                realtime: { params: { eventsPerSecond: 20 } }
+            });
+            this.isConfigured = true;
+            console.log('[SupabaseService] Initialized with Supabase URL:', this.url);
+        } catch (err) {
+            console.error('[SupabaseService] Init error:', err);
             this.isConfigured = false;
         }
     }
 
     setCredentials(url, key) {
-        this.url = url.trim();
-        this.key = key.trim();
+        this.url = (url && url.trim().length > 5) ? url.trim() : DEFAULT_SUPABASE_URL;
+        this.key = (key && key.trim().length > 10) ? key.trim() : DEFAULT_SUPABASE_KEY;
         localStorage.setItem('omni_supabase_url', this.url);
         localStorage.setItem('omni_supabase_key', this.key);
         this.init();
@@ -36,9 +41,15 @@ class SupabaseService {
     async getNodes() {
         if (!this.client) return [];
         try {
-            const { data, error } = await this.client.from('nodes').select('*').order('last_heartbeat', { ascending: false });
-            if (error || !data) return [];
-            return data;
+            const { data, error } = await this.client
+                .from('nodes')
+                .select('*')
+                .order('last_heartbeat', { ascending: false });
+            if (error) {
+                console.warn('[SupabaseService] Nodes query error:', error.message);
+                return [];
+            }
+            return data || [];
         } catch (e) {
             console.warn('[SupabaseService] Error loading nodes:', e.message);
             return [];
@@ -48,9 +59,15 @@ class SupabaseService {
     async getAttachedDevices() {
         if (!this.client) return [];
         try {
-            const { data, error } = await this.client.from('attached_devices').select('*').order('last_sync', { ascending: false });
-            if (error || !data) return [];
-            return data;
+            const { data, error } = await this.client
+                .from('attached_devices')
+                .select('*')
+                .order('last_sync', { ascending: false });
+            if (error) {
+                console.warn('[SupabaseService] Devices query error:', error.message);
+                return [];
+            }
+            return data || [];
         } catch (e) {
             console.warn('[SupabaseService] Error loading attached devices:', e.message);
             return [];
@@ -60,9 +77,16 @@ class SupabaseService {
     async getAssets() {
         if (!this.client) return [];
         try {
-            const { data, error } = await this.client.from('assets').select('*').order('last_modified', { ascending: false });
-            if (error || !data) return [];
-            return data;
+            const { data, error } = await this.client
+                .from('assets')
+                .select('*')
+                .order('last_modified', { ascending: false })
+                .limit(5000);
+            if (error) {
+                console.warn('[SupabaseService] Assets query error:', error.message);
+                return [];
+            }
+            return data || [];
         } catch (e) {
             console.warn('[SupabaseService] Error loading assets:', e.message);
             return [];
@@ -86,11 +110,13 @@ class SupabaseService {
 
         try {
             const channel = this.client
-                .channel('omni_mesh_realtime_stream')
+                .channel('omni_mesh_realtime_broadcast')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'nodes' }, () => onChangeCallback('nodes'))
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'attached_devices' }, () => onChangeCallback('devices'))
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => onChangeCallback('assets'))
-                .subscribe();
+                .subscribe((status) => {
+                    console.log('[Supabase Realtime Status]:', status);
+                });
 
             this.realtimeChannels.push(channel);
         } catch (e) {

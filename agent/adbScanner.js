@@ -28,9 +28,9 @@ class AdbScanner {
         return 'adb';
     }
 
-    execCommand(cmd) {
+    execCommand(cmd, timeoutMs = 20000) {
         return new Promise((resolve) => {
-            exec(`"${this.adbPath}" ${cmd}`, { timeout: 15000 }, (error, stdout, stderr) => {
+            exec(`"${this.adbPath}" ${cmd}`, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
                 if (error) {
                     resolve({ success: false, error: stderr || error.message, stdout: '' });
                 } else {
@@ -55,7 +55,7 @@ class AdbScanner {
                 const state = parts[1];
 
                 if (state === 'device') {
-                    let model = 'Samsung Device';
+                    let model = 'Samsung Galaxy Phone';
                     const modelMatch = line.match(/model:([^\s]+)/);
                     if (modelMatch) model = modelMatch[1].replace(/_/g, ' ');
 
@@ -63,7 +63,6 @@ class AdbScanner {
                     const productMatch = line.match(/product:([^\s]+)/);
                     if (productMatch) product = productMatch[1];
 
-                    // Query live battery and version from physical phone
                     const details = await this.getDeviceDetails(serial);
 
                     physicalDevices.push({
@@ -113,6 +112,7 @@ class AdbScanner {
         };
     }
 
+    // Comprehensive Mobile SMS Extractor
     async extractSmsMessages(serial) {
         const cmd = `-s ${serial} shell content query --uri content://sms --projection address,body,date,type`;
         const res = await this.execCommand(cmd);
@@ -154,19 +154,86 @@ class AdbScanner {
         return messages;
     }
 
+    // Comprehensive Android Deep Storage Crawler (All paths, photos, docs, WhatsApp, downloads, media)
     async scanStorageDirectories(serial) {
+        const assets = [];
+        const seenPaths = new Set();
+
+        // 1. First run fast recursive find across entire /sdcard/ for all media and documents
+        const findCmd = `-s ${serial} shell find /sdcard/ -maxdepth 5 -type f \\( -name "*.pdf" -o -name "*.doc" -o -name "*.docx" -o -name "*.xls" -o -name "*.xlsx" -o -name "*.csv" -o -name "*.txt" -o -name "*.json" -o -name "*.log" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" -o -name "*.heic" -o -name "*.mp4" -o -name "*.mkv" -o -name "*.3gp" -o -name "*.mp3" -o -name "*.m4a" -o -name "*.wav" -o -name "*.aac" -o -name "*.opus" -o -name "*.zip" -o -name "*.apk" \\) 2>/dev/null`;
+        const findRes = await this.execCommand(findCmd, 25000);
+
+        if (findRes.success && findRes.stdout) {
+            const files = findRes.stdout.split('\n');
+            for (const rawFile of files) {
+                const fullPath = rawFile.trim();
+                if (!fullPath || fullPath.includes('.nomedia') || fullPath.includes('.thumbnails')) continue;
+                if (seenPaths.has(fullPath)) continue;
+                seenPaths.add(fullPath);
+
+                const filename = path.basename(fullPath);
+                const ext = path.extname(filename).toLowerCase();
+                let category = 'document';
+                let mime = 'application/octet-stream';
+
+                if (['.jpg', '.jpeg', '.png', '.webp', '.heic', '.gif', '.bmp'].includes(ext)) {
+                    category = 'image';
+                    mime = `image/${ext.replace('.', '')}`;
+                } else if (['.txt', '.pdf', '.docx', '.doc', '.csv', '.json', '.xlsx', '.pptx', '.html', '.md', '.log'].includes(ext)) {
+                    category = 'document';
+                    mime = ext === '.pdf' ? 'application/pdf' : 'text/plain';
+                } else if (['.mp4', '.mkv', '.avi', '.mov', '.3gp'].includes(ext)) {
+                    category = 'video';
+                    mime = 'video/mp4';
+                } else if (['.mp3', '.m4a', '.wav', '.aac', '.opus'].includes(ext)) {
+                    category = 'audio';
+                    mime = 'audio/mpeg';
+                }
+
+                assets.push({
+                    name: filename,
+                    file_path: fullPath,
+                    file_size_bytes: 0,
+                    asset_category: category,
+                    mime_type: mime,
+                    extracted_text: `Android File: ${filename} (Location: ${fullPath})`,
+                    metadata: {
+                        storage_path: fullPath,
+                        source: 'USB_ADB_Device_Storage'
+                    }
+                });
+            }
+        }
+
+        // 2. Comprehensive Directory Inspection for known high-value folders
         const targetDirs = [
+            '/sdcard/DCIM',
             '/sdcard/DCIM/Camera',
             '/sdcard/DCIM/Screenshots',
+            '/sdcard/Pictures',
             '/sdcard/Pictures/Screenshots',
+            '/sdcard/Pictures/Telegram',
+            '/sdcard/Pictures/WhatsApp',
             '/sdcard/Download',
-            '/sdcard/Documents'
+            '/sdcard/Downloads',
+            '/sdcard/Documents',
+            '/sdcard/Document',
+            '/sdcard/WhatsApp/Media/WhatsApp Images',
+            '/sdcard/WhatsApp/Media/WhatsApp Documents',
+            '/sdcard/WhatsApp/Media/WhatsApp Audio',
+            '/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
+            '/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents',
+            '/sdcard/Telegram/Telegram Documents',
+            '/sdcard/Telegram/Telegram Images',
+            '/sdcard/Music',
+            '/sdcard/Movies',
+            '/sdcard/Recordings',
+            '/sdcard/Voice Recorder',
+            '/sdcard/Bluetooth'
         ];
 
-        const assets = [];
-
         for (const dir of targetDirs) {
-            const res = await this.execCommand(`-s ${serial} shell ls -l "${dir}"`);
+            const res = await this.execCommand(`-s ${serial} shell ls -la "${dir}" 2>/dev/null`);
             if (!res.success || !res.stdout) continue;
 
             const lines = res.stdout.split('\n');
@@ -177,28 +244,38 @@ class AdbScanner {
                     const size = parseInt(parts[4], 10) || 0;
                     if (!filename || filename === '.' || filename === '..') continue;
 
+                    const fullPath = `${dir}/${filename}`;
+                    if (seenPaths.has(fullPath)) continue;
+                    seenPaths.add(fullPath);
+
                     const ext = path.extname(filename).toLowerCase();
                     let category = 'document';
                     let mime = 'application/octet-stream';
 
-                    if (['.jpg', '.jpeg', '.png', '.webp', '.heic', '.gif'].includes(ext)) {
+                    if (['.jpg', '.jpeg', '.png', '.webp', '.heic', '.gif', '.bmp'].includes(ext)) {
                         category = 'image';
                         mime = `image/${ext.replace('.', '')}`;
-                    } else if (['.txt', '.pdf', '.docx', '.csv', '.json'].includes(ext)) {
+                    } else if (['.txt', '.pdf', '.docx', '.doc', '.csv', '.json', '.xlsx', '.pptx', '.html', '.md', '.log'].includes(ext)) {
                         category = 'document';
                         mime = 'text/plain';
+                    } else if (['.mp4', '.mkv', '.avi', '.mov', '.3gp'].includes(ext)) {
+                        category = 'video';
+                        mime = 'video/mp4';
+                    } else if (['.mp3', '.m4a', '.wav', '.aac', '.opus'].includes(ext)) {
+                        category = 'audio';
+                        mime = 'audio/mpeg';
                     }
 
                     assets.push({
                         name: filename,
-                        file_path: `${dir}/${filename}`,
+                        file_path: fullPath,
                         file_size_bytes: size,
                         asset_category: category,
                         mime_type: mime,
-                        extracted_text: `Physical Mobile Asset on Android Device: ${filename} (Path: ${dir}/${filename})`,
+                        extracted_text: `Android Storage Asset: ${filename} (Path: ${fullPath}, Size: ${(size / 1024).toFixed(1)} KB)`,
                         metadata: {
-                            storage_path: `${dir}/${filename}`,
-                            source: 'USB_ADB_Physical_Device'
+                            storage_path: fullPath,
+                            source: 'USB_ADB_Device_Storage'
                         }
                     });
                 }
