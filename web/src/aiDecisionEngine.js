@@ -7,9 +7,9 @@
 
 export class AiDecisionEngine {
     constructor() {
-        this.openRouterKey = localStorage.getItem('omni_openrouter_key') || '';
-        this.grokKey = localStorage.getItem('omni_grok_key') || '';
-        this.geminiKey = localStorage.getItem('omni_gemini_api_key') || '';
+        this.openRouterKey = localStorage.getItem('omni_openrouter_key') || import.meta.env.VITE_OPENROUTER_API_KEY || '';
+        this.grokKey = localStorage.getItem('omni_grok_key') || import.meta.env.VITE_GROK_API_KEY || '';
+        this.geminiKey = localStorage.getItem('omni_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
 
         // Free OpenRouter model cascade
         this.openRouterFreeModels = [
@@ -176,23 +176,29 @@ Respond in valid JSON format only, matching this schema:
     }
 
     // ==========================================
-    // TIER 2: GROK AI (xAI API)
+    // TIER 2: GROK / GROQ AI (xAI or Groq API)
     // ==========================================
     async callGrok(prompt, assets) {
-        if (!this.grokKey) throw new Error('Grok API key not set.');
+        if (!this.grokKey) throw new Error('Grok/Groq API key not set.');
 
-        console.log('[AiEngine] Attempting Tier 2 (Grok AI via xAI)...');
+        const isGroq = this.grokKey.startsWith('gsk_');
+        const endpoint = isGroq 
+            ? 'https://api.groq.com/openai/v1/chat/completions' 
+            : 'https://api.x.ai/v1/chat/completions';
+        const model = isGroq ? 'llama-3.3-70b-versatile' : 'grok-2-latest';
+
+        console.log(`[AiEngine] Attempting Tier 2 (${isGroq ? 'Groq Llama 3.3 70B' : 'xAI Grok-2'})...`);
         const context = this.formatContext(assets);
         const system = this.getSystemPrompt();
 
-        const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.grokKey}`
             },
             body: JSON.stringify({
-                model: 'grok-2-latest',
+                model: model,
                 messages: [
                     { role: 'system', content: system },
                     { role: 'user', content: `USER PROMPT: ${prompt}\n\nEVIDENCE ASSETS GATHERED ACROSS DEVICES:\n${context}` }
@@ -202,7 +208,7 @@ Respond in valid JSON format only, matching this schema:
         });
 
         if (!response.ok) {
-            throw new Error(`Grok API HTTP ${response.status}: ${await response.text()}`);
+            throw new Error(`Tier 2 API HTTP ${response.status}: ${await response.text()}`);
         }
 
         const data = await response.json();
@@ -211,7 +217,7 @@ Respond in valid JSON format only, matching this schema:
 
         return {
             ...this.buildResponse(prompt, parsed, assets),
-            source_engine: 'Tier 2: Grok AI (xAI grok-2)'
+            source_engine: `Tier 2: ${isGroq ? 'Groq (Llama 3.3 70B Turbo)' : 'xAI (Grok-2)'}`
         };
     }
 

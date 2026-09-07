@@ -1,6 +1,0 @@
-{
-  "supabaseUrl": "https://xyzcompany.supabase.co",
-  "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIn0.sample",
-  "syncIntervalSeconds": 15,
-  "enableMockAndroidIfNoDevice": true
-}

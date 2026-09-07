@@ -1,3 +1,12 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.env.netlify
+*.secret
+credentials.json
+config.json
+
 # Dependencies
 node_modules/
 .pnp

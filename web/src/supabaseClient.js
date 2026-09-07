@@ -3,8 +3,8 @@ import { mockNodes, mockAttachedDevices, mockAssets } from './mockData.js';
 
 class SupabaseService {
     constructor() {
-        this.url = localStorage.getItem('omni_supabase_url') || '';
-        this.key = localStorage.getItem('omni_supabase_key') || '';
+        this.url = localStorage.getItem('omni_supabase_url') || import.meta.env.VITE_SUPABASE_URL || 'https://xfednxvbjzfssxyaurbc.supabase.co';
+        this.key = localStorage.getItem('omni_supabase_key') || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
         this.client = null;
         this.isConfigured = false;
         this.realtimeChannels = [];
