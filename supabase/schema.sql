@@ -1,6 +1,6 @@
 -- =========================================================
 -- OmniNode AI - Multi-Device Asset, User Auth & Decision Database Schema
--- Run this in your Supabase SQL Editor
+-- Optimized for instant execution in Supabase SQL Editor
 -- =========================================================
 
 -- Enable UUID extension
@@ -128,15 +128,7 @@ CREATE TABLE IF NOT EXISTS public.ai_decisions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. REALTIME PUBLICATION SETUP
-ALTER PUBLICATION supabase_realtime ADD TABLE public.nodes;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.attached_devices;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.assets;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_decisions;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_sessions;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
-
--- 9. ROW LEVEL SECURITY (RLS) POLICIES
+-- 8. ROW LEVEL SECURITY (RLS) POLICIES
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
@@ -144,6 +136,15 @@ ALTER TABLE public.nodes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attached_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_decisions ENABLE ROW LEVEL SECURITY;
+
+-- Drop old policies to avoid duplicate errors
+DROP POLICY IF EXISTS "Allow public all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow public all chat_sessions" ON public.chat_sessions;
+DROP POLICY IF EXISTS "Allow public all chat_messages" ON public.chat_messages;
+DROP POLICY IF EXISTS "Allow public read/write nodes" ON public.nodes;
+DROP POLICY IF EXISTS "Allow public read/write attached_devices" ON public.attached_devices;
+DROP POLICY IF EXISTS "Allow public read/write assets" ON public.assets;
+DROP POLICY IF EXISTS "Allow public read/write ai_decisions" ON public.ai_decisions;
 
 CREATE POLICY "Allow public all profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public all chat_sessions" ON public.chat_sessions FOR ALL USING (true) WITH CHECK (true);
