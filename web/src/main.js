@@ -79,19 +79,20 @@ function setButtonLoading(btn, isLoading, loadingText = 'Loading...') {
     }
 }
 
-// Load Background Data from Supabase
-async function loadBackgroundData() {
+// Load Background Data from Supabase with safe non-blocking cache fallback
+async function loadBackgroundData(timeoutMs = 2500) {
     try {
-        allNodes = await supabaseService.getNodes();
-        allDevices = await supabaseService.getAttachedDevices();
-        allAssets = await supabaseService.getAssets();
+        const state = await supabaseService.fetchAllMeshState(timeoutMs);
+        allNodes = state.nodes || [];
+        allDevices = state.devices || [];
+        allAssets = state.assets || [];
 
         // Update silent status pill
         const pcCount = allNodes.length;
         const devCount = allDevices.length;
         const assetCount = allAssets.length;
 
-        if (pcCount > 0 || devCount > 0) {
+        if (pcCount > 0 || devCount > 0 || assetCount > 0) {
             meshStatusText.textContent = `Synced: ${pcCount} PC${pcCount !== 1 ? 's' : ''}, ${devCount} Android, ${assetCount} Assets`;
             meshStatusPill.style.color = 'var(--accent-emerald)';
         } else {
@@ -441,8 +442,10 @@ async function handleSendMessage(promptText) {
     showTypingIndicator();
 
     try {
-        // Real-time on-demand refresh of live devices and assets at exact moment of request
-        await loadBackgroundData();
+        // Fast on-demand check with a max 1.2s race so AI is never blocked or stalled
+        try {
+            await loadBackgroundData(1200);
+        } catch (e) {}
 
         const result = await aiDecisionEngine.chat(prompt, allAssets, allNodes, allDevices);
         removeTypingIndicator();
@@ -731,5 +734,5 @@ supabaseService.subscribeToChanges(() => {
     loadBackgroundData();
 });
 
-// Realtime mesh background poll every 2.5 seconds
-setInterval(loadBackgroundData, 2500);
+// Realtime mesh background poll with 6-second cadence to protect connection pool
+setInterval(() => loadBackgroundData(3000), 6000);

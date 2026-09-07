@@ -12,7 +12,10 @@ class SupabaseService {
         this.key = (storedKey && storedKey.length > 10) ? storedKey : DEFAULT_SUPABASE_KEY;
         this.client = null;
         this.isConfigured = false;
-        this.realtimeChannels = [];
+        this.cachedNodes = JSON.parse(localStorage.getItem('omni_cached_nodes') || '[]');
+        this.cachedDevices = JSON.parse(localStorage.getItem('omni_cached_devices') || '[]');
+        this.cachedAssets = JSON.parse(localStorage.getItem('omni_cached_assets') || '[]');
+        this.inFlightFetch = null;
         this.init();
     }
 
@@ -24,7 +27,7 @@ class SupabaseService {
                     autoRefreshToken: true,
                     detectSessionInUrl: true
                 },
-                realtime: { params: { eventsPerSecond: 20 } }
+                realtime: { params: { eventsPerSecond: 10 } }
             });
             this.isConfigured = true;
             console.log('[SupabaseService] Initialized with Supabase URL:', this.url);
@@ -42,69 +45,112 @@ class SupabaseService {
         this.init();
     }
 
-    async getNodes() {
-        if (!this.client) return [];
+    async getNodes(timeoutMs = 2500) {
+        if (!this.client) return this.cachedNodes;
         try {
-            const { data, error } = await this.client
+            const queryPromise = this.client
                 .from('nodes')
                 .select('*')
-                .order('last_heartbeat', { ascending: false });
+                .order('last_heartbeat', { ascending: false })
+                .limit(20);
+
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Nodes timeout')), timeoutMs));
+            const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
             if (error) {
                 console.warn('[SupabaseService] Nodes query error:', error.message);
-                return [];
+                return this.cachedNodes;
             }
-            return data || [];
+            if (data && data.length > 0) {
+                this.cachedNodes = data;
+                try { localStorage.setItem('omni_cached_nodes', JSON.stringify(data)); } catch (e) {}
+            }
+            return this.cachedNodes;
         } catch (e) {
-            console.warn('[SupabaseService] Error loading nodes:', e.message);
-            return [];
+            return this.cachedNodes;
         }
     }
 
-    async getAttachedDevices() {
-        if (!this.client) return [];
+    async getAttachedDevices(timeoutMs = 2500) {
+        if (!this.client) return this.cachedDevices;
         try {
-            const { data, error } = await this.client
+            const queryPromise = this.client
                 .from('attached_devices')
                 .select('*')
-                .order('last_sync', { ascending: false });
+                .order('last_sync', { ascending: false })
+                .limit(20);
+
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Devices timeout')), timeoutMs));
+            const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
             if (error) {
                 console.warn('[SupabaseService] Devices query error:', error.message);
-                return [];
+                return this.cachedDevices;
             }
-            return data || [];
+            if (data && data.length > 0) {
+                this.cachedDevices = data;
+                try { localStorage.setItem('omni_cached_devices', JSON.stringify(data)); } catch (e) {}
+            }
+            return this.cachedDevices;
         } catch (e) {
-            console.warn('[SupabaseService] Error loading attached devices:', e.message);
-            return [];
+            return this.cachedDevices;
         }
     }
 
-    async getAssets() {
-        if (!this.client) return [];
+    async getAssets(timeoutMs = 2500) {
+        if (!this.client) return this.cachedAssets;
         try {
-            const { data, error } = await this.client
+            const queryPromise = this.client
                 .from('assets')
                 .select('*')
                 .order('last_modified', { ascending: false })
-                .limit(5000);
+                .limit(300);
+
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Assets timeout')), timeoutMs));
+            const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
             if (error) {
                 console.warn('[SupabaseService] Assets query error:', error.message);
-                return [];
+                return this.cachedAssets;
             }
-            return data || [];
+            if (data && data.length > 0) {
+                this.cachedAssets = data;
+                try { localStorage.setItem('omni_cached_assets', JSON.stringify(data)); } catch (e) {}
+            }
+            return this.cachedAssets;
         } catch (e) {
-            console.warn('[SupabaseService] Error loading assets:', e.message);
-            return [];
+            return this.cachedAssets;
         }
+    }
+
+    async fetchAllMeshState(timeoutMs = 3000) {
+        if (this.inFlightFetch) return this.inFlightFetch;
+
+        this.inFlightFetch = (async () => {
+            try {
+                const [nodes, devices, assets] = await Promise.all([
+                    this.getNodes(timeoutMs),
+                    this.getAttachedDevices(timeoutMs),
+                    this.getAssets(timeoutMs)
+                ]);
+                return { nodes, devices, assets };
+            } finally {
+                this.inFlightFetch = null;
+            }
+        })();
+
+        return this.inFlightFetch;
     }
 
     async saveDecision(decisionRecord) {
         if (!this.client) return { success: true, localOnly: true, data: decisionRecord };
         try {
-            const { data, error } = await this.client.from('ai_decisions').insert(decisionRecord).select();
+            const insertPromise = this.client.from('ai_decisions').insert(decisionRecord).select();
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 3000));
+            const { data, error } = await Promise.race([insertPromise, timeoutPromise]);
             if (error) throw error;
             return { success: true, data };
         } catch (e) {
-            console.warn('[SupabaseService] Error saving decision:', e.message);
             return { success: false, error: e.message };
         }
     }
